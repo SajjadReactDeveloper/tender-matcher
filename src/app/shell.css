@@ -169,3 +169,18 @@ pre.code { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: 
   .providers { grid-template-columns: 1fr; }
   .timeline li { grid-template-columns: 1fr; }
 }
+
+/* ---- page head controls: one row, one height, centred on the title ---- */
+.page-head { align-items: center; }
+.page-head .controls { gap: 12px; }
+.page-head .controls .btn { height: 44px; padding: 0 18px; justify-content: center; white-space: nowrap; }
+.page-head .scan { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--mute); font-size: 14px; white-space: nowrap; }
+.page-head .scan:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.page-head .scan input { width: 64px; height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: var(--wash); color: var(--ink); text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.page-head .scan input:focus-visible { outline: none; }
+.page-head .scan input::-webkit-outer-spin-button, .page-head .scan input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+@media (max-width: 640px) {
+  .page-head .controls { width: 100%; }
+  .page-head .scan { flex: 1 1 100%; justify-content: space-between; }
+  .page-head .controls .btn { flex: 1 1 0; }
+}
