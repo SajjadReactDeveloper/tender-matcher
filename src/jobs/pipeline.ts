@@ -6,6 +6,7 @@ import { readDocuments } from '@/ai/pdf';
 import { appendLog, bumpCounters } from '@/db/queries';
 import { getPendingRows, getTenderRow, insertPending, insertSkipped, knownTenders, markCandidate, markSkipped, rowToListed, saveMatched, updateClosing } from '@/db/tenders';
 import type { Analysis } from '@/domain/types';
+import { redact } from '@/lib/security';
 import { sources } from '@/sources';
 import { SourceShapeError, type ListedTender, type TenderDetail, type TenderSource } from '@/sources/types';
 import { isFatalAiError } from './errors';
@@ -105,7 +106,7 @@ export async function analyseTender(runId: number, id: number, deps: PipelineDep
     await appendLog(runId, `  -> ${analysis.relevance}, score ${analysis.score}`);
   } catch (e) {
     if (e instanceof AiError && !e.retryable && !isFatalAiError(e)) {
-      await markSkipped(id, `analysis failed: ${e.message}`.slice(0, 300));
+      await markSkipped(id, redact(`analysis failed: ${e.message}`).slice(0, 300)); // AiError already redacts; kept here so the stored text never depends on that
       await appendLog(runId, `  skipped: analysis failed (${e.message})`);
       return;
     }
