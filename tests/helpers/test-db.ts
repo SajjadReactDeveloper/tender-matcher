@@ -16,7 +16,7 @@ export async function createTestDb(): Promise<Db> {
     return db as unknown as Db;
   })();
   const db = await cached;
-  await db.execute(sql`truncate table tenders, runs, run_logs, login_attempts restart identity cascade`);
+  await db.execute(sql`truncate table tenders, runs, run_logs, login_attempts, settings, api_keys, ai_calls, audit_events restart identity cascade`);
   setDb(db);
   return db;
 }

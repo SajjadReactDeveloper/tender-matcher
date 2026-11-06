@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, date, index, integer, pgTable, serial, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, date, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const tenders = pgTable(
   'tenders',
@@ -79,4 +79,69 @@ export const loginAttempts = pgTable(
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('login_attempts_ip_idx').on(t.ip, t.at)],
+);
+
+// One row; id is always 1. Null model = use the provider's default.
+export const settings = pgTable('settings', {
+  id: integer('id').primaryKey(),
+  provider: text('provider', { enum: ['groq', 'openai', 'anthropic'] }).notNull(),
+  textModel: text('text_model'),
+  visionModel: text('vision_model'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// API keys saved from the dashboard, AES-256-GCM encrypted (see src/lib/crypto.ts). Only last4 is ever sent to the browser.
+export const apiKeys = pgTable('api_keys', {
+  provider: text('provider').primaryKey(),
+  ciphertext: text('ciphertext').notNull(),
+  iv: text('iv').notNull(),
+  tag: text('tag').notNull(),
+  last4: text('last4').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// One row per provider HTTP attempt (retries and rate limits included). Tokens stay null when the provider reports none.
+export const aiCalls = pgTable(
+  'ai_calls',
+  {
+    id: serial('id').primaryKey(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    runId: integer('run_id'),
+    tenderExternalId: text('tender_external_id'),
+    purpose: text('purpose', { enum: ['screen', 'analyse', 'read-pages', 'test'] }).notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    attempt: integer('attempt').notNull().default(1),
+    status: text('status', { enum: ['ok', 'rate_limited', 'error'] }).notNull(),
+    httpStatus: integer('http_status'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    totalTokens: integer('total_tokens'),
+    images: integer('images').notNull().default(0),
+    promptChars: integer('prompt_chars').notNull().default(0),
+    replyChars: integer('reply_chars').notNull().default(0),
+    latencyMs: integer('latency_ms').notNull().default(0),
+    retryAfterS: integer('retry_after_s'),
+    estCostUsd: numeric('est_cost_usd', { precision: 12, scale: 6 }),
+    error: text('error'),
+    promptPreview: text('prompt_preview'),
+    replyPreview: text('reply_preview'),
+  },
+  (t) => [index('ai_calls_at_idx').on(t.at), index('ai_calls_run_idx').on(t.runId)],
+);
+
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: serial('id').primaryKey(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    category: text('category', { enum: ['fetch', 'run', 'settings', 'auth'] }).notNull(),
+    action: text('action').notNull(),
+    status: text('status', { enum: ['ok', 'error', 'info'] }).notNull().default('info'),
+    runId: integer('run_id'),
+    ref: text('ref'),
+    durationMs: integer('duration_ms'),
+    details: jsonb('details'),
+  },
+  (t) => [index('audit_events_at_idx').on(t.at), index('audit_events_cat_idx').on(t.category, t.at)],
 );

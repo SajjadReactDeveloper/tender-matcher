@@ -15,6 +15,13 @@
       "when": 1793974218338,
       "tag": "0001_mute_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793995857809,
+      "tag": "0002_audit_settings",
+      "breakpoints": true
     }
   ]
 }
