@@ -10,7 +10,7 @@ export function LoginForm() {
     <form action={action} className={styles.form}>
       <label>
         Email
-        <input name="email" type="email" autoComplete="username" required autoFocus />
+        <input name="email" type="email" autoComplete="username" defaultValue={state.email} required autoFocus />
       </label>
       <label>
         Password

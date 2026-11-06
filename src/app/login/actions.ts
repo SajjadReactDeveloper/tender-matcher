@@ -7,16 +7,18 @@ import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
 
 export interface LoginState {
   error?: string;
+  email?: string; // handed back so a failed attempt does not wipe what was typed (React resets the form after an action)
 }
 
 // Server Actions are POST-only and Next checks Origin against Host, which covers CSRF for this form.
 export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
+  const email = String(formData.get('email') ?? '');
   const result = await attemptLogin({
-    email: String(formData.get('email') ?? ''),
+    email,
     password: String(formData.get('password') ?? ''),
     ip: clientIp(await headers()),
   });
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return { error: result.error, email };
   (await cookies()).set(SESSION_COOKIE, result.token, sessionCookieOptions);
   redirect('/');
 }
