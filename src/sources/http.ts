@@ -9,15 +9,33 @@ export interface FetchOptions {
 
 class TooLargeError extends Error {}
 
+// Reads the body chunk by chunk and aborts as soon as it passes the cap, so a huge or endless response (no Content-Length)
+// can never be buffered whole.
+async function readCapped(res: Response, url: string): Promise<Buffer> {
+  if (!res.body) return Buffer.from(await res.arrayBuffer());
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BYTES) {
+      await reader.cancel();
+      throw new TooLargeError(`File too large: ${url}`);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
 export async function fetchBuffer(url: string, { retries = 3, retryDelayMs = 1500, timeoutMs = 60000 }: FetchOptions = {}): Promise<Buffer> {
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(timeoutMs) });
       if (!res.ok) throw new Error(`${res.status} for ${url}`);
       if (Number(res.headers.get('content-length')) > MAX_BYTES) throw new TooLargeError(`File too large: ${url}`);
-      const buf = Buffer.from(await res.arrayBuffer()); // ponytail: chunked responses are only checked after download
-      if (buf.length > MAX_BYTES) throw new TooLargeError(`File too large: ${url}`);
-      return buf;
+      return await readCapped(res, url);
     } catch (e) {
       if (e instanceof TooLargeError || attempt >= retries) throw e;
       await new Promise((r) => setTimeout(r, retryDelayMs * (attempt + 1)));

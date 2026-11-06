@@ -61,6 +61,19 @@ describe('fetchBuffer', () => {
     await expect(fetchBuffer('https://example.com/big.pdf', { retries: 0 })).rejects.toThrow(/too large/i);
   });
 
+  test('stops reading a chunked response (no Content-Length) as soon as it passes 40 MB, instead of buffering it all', async () => {
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (++pulled > 12) return controller.close(); // 12 x 8 MB = 96 MB on offer
+        controller.enqueue(new Uint8Array(8 * 1024 * 1024));
+      },
+    });
+    vi.stubGlobal('fetch', async () => new Response(stream));
+    await expect(fetchBuffer('https://example.com/big', { retries: 0 })).rejects.toThrow(/too large/i);
+    expect(pulled).toBeLessThanOrEqual(7); // 40 MB is reached on the 6th chunk
+  });
+
   test('retries a failed request and returns the body', async () => {
     let calls = 0;
     vi.stubGlobal('fetch', async () => {
