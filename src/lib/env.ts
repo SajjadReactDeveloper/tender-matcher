@@ -11,6 +11,7 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   TEXT_MODEL: z.string().optional(),
   VISION_MODEL: z.string().optional(),
+  SETTINGS_ENCRYPTION_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;
