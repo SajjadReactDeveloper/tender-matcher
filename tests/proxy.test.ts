@@ -53,7 +53,9 @@ describe('proxy matcher', () => {
   const pattern = new RegExp('^' + config.matcher[0] + '$');
 
   test('does not intercept the Workflow runtime paths or static assets, but does cover pages and the API', () => {
-    expect(pattern.test('/.well-known/workflow/v1/flow')).toBe(false);
+    expect(pattern.test('/.well-known/workflow/v1/flow')).toBe(false); // the queue calls this; Vercel authenticates it
+    expect(pattern.test('/.well-known/workflow/v1/webhook/abc')).toBe(true); // unused public route stays behind the login gate
+    expect(pattern.test('/xwell-known/workflow/v1/flow')).toBe(true); // the dot is literal
     expect(pattern.test('/_next/static/chunk.js')).toBe(false);
     expect(pattern.test('/logo.svg')).toBe(false);
     expect(pattern.test('/')).toBe(true);

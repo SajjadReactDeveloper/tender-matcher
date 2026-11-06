@@ -1,16 +1,20 @@
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
-import { getEnv } from '@/lib/env';
 import * as schema from './schema';
 
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 let db: Db | undefined;
 
-// Lazy so importing this module never needs DATABASE_URL (builds and tests run without it).
+// Lazy so importing this module never needs DATABASE_URL (builds and tests run without it). Reads only that one variable on purpose.
 export function getDb(): Db {
-  return (db ??= drizzle(neon(getEnv().DATABASE_URL), { schema }) as unknown as Db);
+  if (!db) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error('DATABASE_URL is not set');
+    db = drizzle(neon(url), { schema }) as unknown as Db;
+  }
+  return db;
 }
 
 // Tests swap in an in-process Postgres (PGlite); pass undefined to reset.
