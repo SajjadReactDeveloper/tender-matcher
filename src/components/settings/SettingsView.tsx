@@ -19,6 +19,7 @@ interface KeyStatus {
   configured: boolean;
   last4: string | null;
   source: 'dashboard' | 'env' | 'none';
+  unreadable?: boolean;
 }
 interface Settings {
   provider: string;
@@ -228,6 +229,7 @@ function KeyRow({ provider, status, enabled, onChanged }: { provider: ProviderIn
   const { toast } = useToast();
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
+  const unreadable = status?.unreadable === true;
   const where = !status || status.source === 'none' ? 'Not set' : status.source === 'dashboard' ? `Saved here, ends in ${status.last4}` : `From an environment variable, ends in ${status.last4}`;
 
   const save = async () => {
@@ -260,6 +262,7 @@ function KeyRow({ provider, status, enabled, onChanged }: { provider: ProviderIn
       <div className="name">
         {provider.label}
         <small>{where}</small>
+        {unreadable && <small className="result bad">A key saved here can no longer be read (the encryption key changed). Replace or remove it.</small>}
       </div>
       <input
         type="password"
@@ -274,7 +277,7 @@ function KeyRow({ provider, status, enabled, onChanged }: { provider: ProviderIn
       <button type="button" className="btn small primary" onClick={save} disabled={!enabled || busy || !value.trim()}>
         {status?.source === 'dashboard' ? 'Replace key' : 'Save key'}
       </button>
-      {status?.source === 'dashboard' && (
+      {(status?.source === 'dashboard' || unreadable) && (
         <button type="button" className="btn small danger" onClick={remove} disabled={busy}>
           Remove
         </button>

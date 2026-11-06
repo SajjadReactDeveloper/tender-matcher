@@ -123,6 +123,29 @@ describe('Settings', () => {
     expect(document.body.innerHTML).not.toContain('sk-secret-key');
   });
 
+  test('saving a key keeps an unsaved provider choice on the page', async () => {
+    routes({
+      'GET /api/settings': () => json(settings()),
+      'GET /api/usage*': () => json(usage),
+      'PUT /api/settings/keys/openai': () => json({ ok: true, last4: 'wxyz' }),
+    });
+    wrap(<SettingsView />);
+    await screen.findByText('Provider and model');
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
+    fireEvent.change(screen.getByLabelText('OpenAI API key'), { target: { value: 'sk-secret-key-abcdefwxyz' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save key' })[0]);
+    await screen.findByText('OpenAI key saved.');
+    expect(screen.getByRole('button', { name: /OpenAI/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('an unreadable saved key is explained and can be removed', async () => {
+    const keys = [{ provider: 'groq', configured: false, last4: null, source: 'none', unreadable: true }, { provider: 'openai', configured: false, last4: null, source: 'none' }];
+    routes({ 'GET /api/settings': () => json(settings({ keys })), 'GET /api/usage*': () => json(usage) });
+    wrap(<SettingsView />);
+    expect(await screen.findByText(/can no longer be read/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+  });
+
   test('key fields are disabled with an explanation when encryption is not configured', async () => {
     routes({ 'GET /api/settings': () => json(settings({ encryptionConfigured: false })), 'GET /api/usage*': () => json(usage) });
     wrap(<SettingsView />);

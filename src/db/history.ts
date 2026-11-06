@@ -1,4 +1,4 @@
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { asc, desc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { getDb, withRetry } from './client';
 import { aiCalls, auditEvents, runLogs, runs } from './schema';
 
@@ -29,13 +29,16 @@ export async function listRuns(limit = 100) {
   }));
 }
 
+// The run page never shows prompt/reply previews (up to 8 KB per call); leaving them out keeps the payload small for big runs.
+const aiCallColumns = (({ promptPreview, replyPreview, ...rest }) => (void promptPreview, void replyPreview, rest))(getTableColumns(aiCalls));
+
 export async function getRunDetail(id: number) {
   const [run] = await withRetry(() => getDb().select().from(runs).where(eq(runs.id, id)));
   if (!run) return null;
   const db = getDb();
   const [logs, calls, events] = await Promise.all([
     withRetry(() => db.select({ at: runLogs.at, message: runLogs.message }).from(runLogs).where(eq(runLogs.runId, id)).orderBy(asc(runLogs.id)).limit(1000)),
-    withRetry(() => db.select().from(aiCalls).where(eq(aiCalls.runId, id)).orderBy(asc(aiCalls.id)).limit(1000)),
+    withRetry(() => db.select(aiCallColumns).from(aiCalls).where(eq(aiCalls.runId, id)).orderBy(asc(aiCalls.id)).limit(1000)),
     withRetry(() => db.select().from(auditEvents).where(eq(auditEvents.runId, id)).orderBy(asc(auditEvents.id)).limit(1000)),
   ]);
   return { run, logs, aiCalls: calls, events };

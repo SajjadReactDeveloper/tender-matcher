@@ -79,8 +79,20 @@ describe('auth events', () => {
     expect(JSON.stringify(rows)).not.toContain('right-password');
   });
 
-  test('a blocked attempt is recorded as rate-limited', async () => {
-    for (let i = 0; i < 6; i++) await attemptLogin({ email: 'me@example.com', password: 'bad', ip: '5.5.5.5' });
-    expect((await events('auth')).map((r) => r.action).at(-1)).toBe('login-blocked');
+  test('blocked attempts are not recorded, so a flood cannot grow the audit table: only the 5 allowed failures are', async () => {
+    for (let i = 0; i < 30; i++) await attemptLogin({ email: 'me@example.com', password: 'bad', ip: '5.5.5.5' });
+    const rows = await events('auth');
+    expect(rows).toHaveLength(5);
+    expect(rows.every((r) => r.action === 'login-failed')).toBe(true);
+  });
+
+  test('logout is recorded only when the request carries a valid session', async () => {
+    const { recordLogout } = await import('@/lib/auth/login');
+    await recordLogout(undefined, '1.1.1.1');
+    await recordLogout('not-a-session', '1.1.1.1');
+    expect(await events('auth')).toHaveLength(0);
+    const { createSession } = await import('@/lib/auth/session');
+    await recordLogout(await createSession('me@example.com'), '1.1.1.1');
+    expect((await events('auth')).map((r) => r.action)).toEqual(['logout']);
   });
 });

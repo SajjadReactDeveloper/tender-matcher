@@ -2,8 +2,7 @@
 
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { recordEvent } from '@/audit/store';
-import { attemptLogin, clientIp } from '@/lib/auth/login';
+import { attemptLogin, clientIp, recordLogout } from '@/lib/auth/login';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth/session';
 
 export interface LoginState {
@@ -27,7 +26,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
 }
 
 export async function logoutAction(): Promise<void> {
-  await recordEvent({ category: 'auth', action: 'logout', status: 'info', details: { ip: clientIp(await headers()) } });
+  await recordLogout((await cookies()).get(SESSION_COOKIE)?.value, clientIp(await headers()));
   (await cookies()).delete(SESSION_COOKIE);
   redirect('/login');
 }

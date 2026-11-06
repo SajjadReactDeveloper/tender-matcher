@@ -24,19 +24,20 @@ async function readSettings() {
 }
 
 // The key for one provider: the saved (decrypted) one first, then the env var. A stored key that cannot be decrypted counts as absent.
-async function resolveKey(provider: Provider): Promise<{ source: KeySource; key: string | null; last4: string | null }> {
+async function resolveKey(provider: Provider): Promise<{ source: KeySource; key: string | null; last4: string | null; unreadable?: boolean }> {
   const [row] = await withRetry(() => getDb().select().from(apiKeys).where(eq(apiKeys.provider, provider)));
+  let unreadable = false;
   if (row) {
     try {
       const key = decryptSecret(row, provider);
       registerSecret(key);
       return { source: 'dashboard', key, last4: row.last4 };
     } catch {
-      /* fall through to env */
+      unreadable = true; // saved under a different encryption key: fall back to env, and tell the person
     }
   }
   const env = clean(process.env[PROVIDERS[provider].envKey]);
-  return env ? { source: 'env', key: env, last4: env.slice(-4) } : { source: 'none', key: null, last4: null };
+  return env ? { source: 'env', key: env, last4: env.slice(-4), unreadable } : { source: 'none', key: null, last4: null, unreadable };
 }
 
 // Read on every AI call so a change on the dashboard applies to the very next request, even mid-run.
@@ -82,11 +83,11 @@ export async function removeKey(provider: Provider): Promise<void> {
   await recordEvent({ category: 'settings', action: 'key-removed', status: 'ok', ref: provider, details: { provider } });
 }
 
-export async function keyStatus(): Promise<{ provider: Provider; configured: boolean; last4: string | null; source: KeySource }[]> {
+export async function keyStatus(): Promise<{ provider: Provider; configured: boolean; last4: string | null; source: KeySource; unreadable: boolean }[]> {
   const out = [];
   for (const provider of PROVIDER_IDS) {
     const k = await resolveKey(provider);
-    out.push({ provider, configured: k.key !== null, last4: k.last4, source: k.source });
+    out.push({ provider, configured: k.key !== null, last4: k.last4, source: k.source, unreadable: k.unreadable === true });
   }
   return out;
 }

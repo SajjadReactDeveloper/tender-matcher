@@ -39,6 +39,13 @@ describe('getAiConfig', () => {
 });
 
 describe('keys', () => {
+  test('a saved key that can no longer be decrypted is reported as unreadable instead of silently vanishing', async () => {
+    await saveKey('groq', 'gsk_dashboardkey12345678');
+    vi.stubEnv('SETTINGS_ENCRYPTION_KEY', Buffer.alloc(32, 9).toString('base64')); // the encryption key was changed
+    const s = (await keyStatus()).find((k) => k.provider === 'groq')!;
+    expect(s).toMatchObject({ configured: false, source: 'none', unreadable: true });
+  });
+
   test('keyStatus shows last4 and the source but never the key itself', async () => {
     await saveKey('anthropic', 'sk-ant-supersecret-9876');
     const status = await keyStatus();

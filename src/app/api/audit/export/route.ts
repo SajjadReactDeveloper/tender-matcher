@@ -20,11 +20,12 @@ export const GET = (req: Request) =>
     let before = filter.before;
     while (rows.length < MAX_ROWS) {
       const page = kind === 'ai' ? await listAiCalls({ ...filter, before, limit: 200 }) : await listAuditEvents({ ...filter, before, limit: 200 });
-      rows.push(...page.rows);
+      rows.push(...page.rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'promptPreview' && k !== 'replyPreview')))); // previews are large; use the Audit page to read them
       if (!page.next) break;
       before = page.next;
     }
+    const truncated = rows.length >= MAX_ROWS;
     const cols = rows.length ? Object.keys(rows[0]) : [];
     const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\r\n');
-    return new Response(csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="audit-${kind}.csv"` } });
+    return new Response(csv, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="audit-${kind}.csv"`, ...(truncated ? { 'X-Export-Truncated': 'true' } : {}) } });
   });

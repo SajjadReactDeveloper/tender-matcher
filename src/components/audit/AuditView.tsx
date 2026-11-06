@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api-client';
 import { ms, num, stamp, usd } from '../fmt';
 
@@ -55,6 +55,7 @@ export function AuditView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<number | null>(null);
+  const seq = useRef(0);
 
   const query = useCallback(
     (before?: number) => {
@@ -71,16 +72,18 @@ export function AuditView() {
 
   const load = useCallback(
     async (before?: number) => {
+      const mine = ++seq.current; // only the newest request may update the table
       setLoading(true);
       try {
         const page = (await (await api(`/api/audit?${query(before)}`)).json()) as Page;
+        if (mine !== seq.current) return;
         setRows((cur) => (before ? [...cur, ...page.rows] : page.rows));
         setNext(page.next);
         setError('');
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        if (mine === seq.current) setError(e instanceof Error ? e.message : String(e));
       } finally {
-        setLoading(false);
+        if (mine === seq.current) setLoading(false);
       }
     },
     [query],
@@ -203,7 +206,18 @@ export function AuditView() {
               <tbody>
                 {rows.map((r) => (
                   <Fragment key={r.id}>
-                    <tr className="click" onClick={() => setOpen(open === r.id ? null : r.id)} aria-expanded={open === r.id}>
+                    <tr
+                      className="click"
+                      tabIndex={0}
+                      aria-label={`${open === r.id ? 'Hide' : 'Show'} details`}
+                      onClick={() => setOpen(open === r.id ? null : r.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setOpen(open === r.id ? null : r.id);
+                        }
+                      }}
+                    >
                       {kind === 'ai' ? <AiCells r={r as AiRow} /> : <EventCells r={r as EventRow} />}
                     </tr>
                     {open === r.id && (

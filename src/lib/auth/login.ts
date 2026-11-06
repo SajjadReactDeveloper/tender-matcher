@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { recordEvent } from '@/audit/store';
 import { verifyPassword } from './password';
 import { releaseLoginAttempt, reserveLoginAttempt } from './rate-limit';
-import { createSession } from './session';
+import { createSession, verifySession } from './session';
 
 export type LoginResult = { ok: true; token: string } | { ok: false; error: string };
 
@@ -25,7 +25,7 @@ export async function attemptLogin({ email, password, ip, userAgent }: { email: 
 
   const attempt = await reserveLoginAttempt(ip);
   if (!attempt.allowed) {
-    await recordEvent({ category: 'auth', action: 'login-blocked', status: 'error', details: { ip, userAgent } });
+    // blocked attempts are not audited: anyone can send them, so recording each would let a flood fill the table
     return { ok: false, error: 'Too many failed attempts. Try again in 15 minutes.' };
   }
 
@@ -39,4 +39,10 @@ export async function attemptLogin({ email, password, ip, userAgent }: { email: 
   await releaseLoginAttempt(attempt.id);
   await recordEvent({ category: 'auth', action: 'login-ok', status: 'ok', details: { ip, userAgent } });
   return { ok: true, token: await createSession(expectedEmail.trim().toLowerCase()) };
+}
+
+// Only a request with a valid session is recorded as a logout, so visitors without one cannot add audit rows.
+export async function recordLogout(token: string | undefined, ip: string): Promise<void> {
+  if (!(await verifySession(token))) return;
+  await recordEvent({ category: 'auth', action: 'logout', status: 'info', details: { ip } });
 }

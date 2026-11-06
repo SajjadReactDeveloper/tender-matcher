@@ -128,6 +128,14 @@ describe('audit and usage', () => {
     expect(text).not.toMatch(/(^|,)=HYPERLINK/m);
   });
 
+  test('the AI CSV export leaves out the large prompt and reply previews', async () => {
+    await recordAiCall(call({ promptPreview: 'PROMPT-BODY', replyPreview: 'REPLY-BODY', inputTokens: 5 }));
+    const text = await (await exportRoute.GET(req('/api/audit/export?kind=ai'))).text();
+    expect(text).toContain('inputTokens');
+    expect(text).not.toContain('PROMPT-BODY');
+    expect(text).not.toContain('promptPreview');
+  });
+
   test('usage sums the window and rejects other windows', async () => {
     await recordAiCall(call({ inputTokens: 100, outputTokens: 20 }));
     expect(await (await usageRoute.GET(req('/api/usage?hours=24'))).json()).toMatchObject({ calls: 1, inputTokens: 100, outputTokens: 20 });
@@ -138,12 +146,13 @@ describe('audit and usage', () => {
 describe('history', () => {
   test('lists runs with token totals and returns a run detail with logs, AI calls and events; unknown id is 404', async () => {
     const run = await createRun(10);
-    await recordAiCall(call({ runId: run.id, inputTokens: 40, outputTokens: 5 }));
+    await recordAiCall(call({ runId: run.id, inputTokens: 40, outputTokens: 5, promptPreview: 'PROMPT-BODY', replyPreview: 'REPLY-BODY' }));
     await recordAiCall(call({ runId: run.id, inputTokens: 60, outputTokens: 5 }));
     const list = await (await historyRoute.GET(req('/api/history'))).json();
     expect(list.runs[0]).toMatchObject({ id: run.id, aiCalls: 2, inputTokens: 100, outputTokens: 10 });
     const detail = await (await detailRoute.GET(req(`/api/history/${run.id}`), ctx({ id: String(run.id) }))).json();
     expect(detail.aiCalls).toHaveLength(2);
+    expect(JSON.stringify(detail.aiCalls)).not.toContain('PROMPT-BODY'); // previews stay out of the run page payload
     expect(detail.events.map((e: { action: string }) => e.action)).toContain('queued');
     expect((await detailRoute.GET(req('/api/history/999'), ctx({ id: '999' }))).status).toBe(404);
     expect((await detailRoute.GET(req('/api/history/abc'), ctx({ id: 'abc' }))).status).toBe(404);

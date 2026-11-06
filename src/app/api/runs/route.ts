@@ -18,7 +18,7 @@ export async function POST(req: Request): Promise<Response> {
     const { limit } = parsed.data;
 
     const run = await createRun(limit); // 409 if a run is already active
-    void pruneAudit(); // keep the audit tables to 180 days; never blocks or fails the run
+    await pruneAudit(); // keep the audit tables to 180 days; swallows its own errors, so it never fails the run
     try {
       const wf = await start(fetchRunWorkflow, [run.id, limit]);
       await setWorkflowRunId(run.id, wf.runId);
