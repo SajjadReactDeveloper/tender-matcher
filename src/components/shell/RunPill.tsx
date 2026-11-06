@@ -39,7 +39,7 @@ export function RunPill() {
   return (
     <Link href={run ? `/runs/${run.id}` : '/runs'} className={`pill${busy ? ' busy' : ''}${bad ? ' bad' : ''}`} aria-live="polite">
       <span className="dot" aria-hidden="true" />
-      {text}
+      <span className="label">{text}</span>
     </Link>
   );
 }

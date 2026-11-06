@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { Pagination } from '../Pagination';
 import { useApi } from '../useApi';
 import { duration, num, stamp, usd } from '../fmt';
 
@@ -24,7 +26,11 @@ export interface RunRow {
 export function RunsView() {
   const { data, error, loading, reload } = useApi<{ runs: RunRow[] }>('/api/history');
   const router = useRouter();
-  const runs = data?.runs ?? [];
+  const all = data?.runs ?? [];
+  const [pageNo, setPageNo] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const page = Math.min(pageNo, Math.max(1, Math.ceil(all.length / pageSize)));
+  const runs = all.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <>
@@ -50,7 +56,7 @@ export function RunsView() {
               <span key={i} className="sk" style={{ height: 18, margin: '14px 0' }} />
             ))}
           </div>
-        ) : runs.length === 0 ? (
+        ) : all.length === 0 ? (
           <div className="empty">
             <b>No runs yet</b>
             Press Fetch latest tenders on the Tenders page to start one.
@@ -98,6 +104,7 @@ export function RunsView() {
           </div>
         )}
       </section>
+      <Pagination total={all.length} page={page} pageSize={pageSize} noun="runs" onPage={setPageNo} onPageSize={(n) => { setPageSize(n); setPageNo(1); }} />
     </>
   );
 }

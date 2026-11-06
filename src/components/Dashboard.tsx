@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TenderView } from '@/domain/types';
 import { api } from './api-client';
-import { daysLeft, isOpen } from './format';
+import { daysLeft, fmt, isOpen } from './format';
 import { RunBar, isActive, type LogLine, type RunSummary } from './RunBar';
-import { Runway } from './Runway';
+import { ClosingChart } from './ClosingChart';
+import { Pagination } from './Pagination';
 import { TenderList } from './TenderList';
 import { StatRow } from './StatRow';
 import { ToastProvider, useToast } from './Toasts';
@@ -24,6 +25,9 @@ function DashboardInner() {
   const [sort, setSort] = useState('closing');
   const [q, setQ] = useState('');
   const [source, setSource] = useState('');
+  const [day, setDay] = useState('');
+  const [pageState, setPageState] = useState({ key: '', page: 1 });
+  const [pageSize, setPageSize] = useState(10);
   const [run, setRun] = useState<RunSummary | null>(null);
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [runLoaded, setRunLoaded] = useState(false);
@@ -35,7 +39,6 @@ function DashboardInner() {
   const wasActive = useRef(false);
   const lastMatched = useRef(0);
   const offlineRef = useRef(false);
-  const scrollTo = useRef(false);
 
   const loadTenders = useCallback(async () => {
     try {
@@ -93,13 +96,6 @@ function DashboardInner() {
     return () => clearInterval(id);
   }, [poll, active]);
 
-  useEffect(() => {
-    if (openId !== null && scrollTo.current) {
-      scrollTo.current = false;
-      document.querySelector(`.item[data-id="${openId}"]`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-    }
-  }, [openId]);
-
   const sources = useMemo(() => [...new Set(tenders.map((t) => t.source))], [tenders]);
 
   const base = useMemo(
@@ -115,9 +111,19 @@ function DashboardInner() {
       posted: (a, b) => b.postingDate.localeCompare(a.postingDate),
     };
     return base
-      .filter((t) => (when !== '7' || !t.lastDate || daysLeft(t.lastDate) <= 7) && (!rel || t.relevance === rel) && (!needle || [t.name, t.department, t.scope, t.refNo, t.recommendation].join(' ').toLowerCase().includes(needle)))
+      .filter((t) => (when !== '7' || !t.lastDate || daysLeft(t.lastDate) <= 7) && (!rel || t.relevance === rel) && (!day || t.lastDate === day) && (!needle || [t.name, t.department, t.scope, t.refNo, t.recommendation].join(' ').toLowerCase().includes(needle)))
       .sort(by[sort] ?? by.closing);
-  }, [base, q, rel, sort, when]);
+  }, [base, q, rel, sort, when, day]);
+
+  // Any filter change goes back to page 1; the page is clamped if the list shrinks.
+  const filterKey = [rel, when, sort, q, source, day, pageSize].join('|');
+  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const page = Math.min(pageState.key === filterKey ? pageState.page : 1, pages);
+  const shown = useMemo(() => visible.slice((page - 1) * pageSize, page * pageSize), [visible, page, pageSize]);
+  const goTo = (n: number) => {
+    setPageState({ key: filterKey, page: n });
+    document.getElementById('list')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  };
 
   const count = (r: string) => base.filter((t) => !r || t.relevance === r).length;
 
@@ -188,15 +194,7 @@ function DashboardInner() {
 
       <RunBar loading={!runLoaded} run={run} logs={logs} matchedTotal={tenders.length} offline={offline} onStop={stop} />
 
-      <Runway
-        tenders={base}
-        loading={loading}
-        onPick={(id) => {
-          setRel('');
-          scrollTo.current = true;
-          setOpenId(id);
-        }}
-      />
+      <ClosingChart tenders={base} loading={loading} selected={day} onPick={(iso) => { setDay(iso); setOpenId(null); }} />
 
       <div className="filters">
         <div className="seg" id="relseg" role="group" aria-label="Relevance">
@@ -230,7 +228,19 @@ function DashboardInner() {
         <input type="search" placeholder="Search name, department or scope" aria-label="Search tenders" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
-      <TenderList tenders={visible} hasAny={tenders.length > 0} loading={loading} error={loadError} openId={openId} onToggle={(id) => setOpenId((cur) => (cur === id ? null : id))} onRetry={retry} />
+      {day && (
+        <p className="day-filter">
+          Closing on {fmt(day)}
+          <button type="button" aria-label="Clear the date filter" onClick={() => setDay('')}>
+            x
+          </button>
+        </p>
+      )}
+
+      <TenderList tenders={shown} hasAny={tenders.length > 0} loading={loading} error={loadError} openId={openId} onToggle={(id) => setOpenId((cur) => (cur === id ? null : id))} onRetry={retry} />
+      {!loading && !loadError && (
+        <Pagination total={visible.length} page={page} pageSize={pageSize} noun="tenders" onPage={goTo} onPageSize={(n) => { setPageSize(n); setPageState({ key: '', page: 1 }); }} />
+      )}
     </div>
   );
 }
