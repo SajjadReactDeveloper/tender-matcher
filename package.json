@@ -1,14 +1,47 @@
 {
-  "name": "ppra-tender-matcher",
-  "version": "1.0.0",
+  "name": "tender-matcher",
+  "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "start": "node --env-file=.env src/server.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "cheerio": "^1.2.0",
+    "drizzle-orm": "^0.45.4",
     "exceljs": "^4.4.0",
-    "pdf-to-img": "^7.0.1"
+    "jose": "^6.2.15",
+    "next": "16.4.5",
+    "pdf-to-img": "^7.0.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "workflow": "^5.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.2.1",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.5",
+    "jsdom": "^31.0.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
