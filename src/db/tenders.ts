@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Analysis } from '@/domain/types';
 import type { ListedTender, TenderDetail } from '@/sources/types';
 import { getDb, withRetry } from './client';
@@ -83,5 +83,16 @@ export async function saveMatched(id: number, d: TenderDetail, a: Analysis, page
         docAdvertisement: d.links.advertisement ?? null, docTender: d.links.tenderDocument ?? null, pagesRead, analysedAt: new Date(),
       })
       .where(eq(tenders.id, id)),
+  );
+}
+
+// Matched tenders only, newest posting date first (undated last).
+export async function listMatched(source?: string): Promise<TenderRow[]> {
+  return withRetry(() =>
+    getDb()
+      .select()
+      .from(tenders)
+      .where(source ? and(eq(tenders.decision, 'matched'), eq(tenders.source, source)) : eq(tenders.decision, 'matched'))
+      .orderBy(sql`${tenders.postingDate} desc nulls last`, desc(tenders.id)),
   );
 }
