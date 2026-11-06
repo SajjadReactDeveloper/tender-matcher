@@ -7,6 +7,7 @@ import * as exportRoute from '@/app/api/audit/export/route';
 import * as historyRoute from '@/app/api/history/route';
 import * as detailRoute from '@/app/api/history/[id]/route';
 import * as usageRoute from '@/app/api/usage/route';
+import * as profileRoute from '@/app/api/settings/profile/route';
 import { recordAiCall, recordEvent } from '@/audit/store';
 import { createRun } from '@/db/queries';
 import { createTestDb } from '../helpers/test-db';
@@ -45,6 +46,9 @@ describe('every admin route needs a session', () => {
     ['export GET', () => exportRoute.GET(req('/api/audit/export', { signedIn: false }))],
     ['history GET', () => historyRoute.GET(req('/api/history', { signedIn: false }))],
     ['detail GET', () => detailRoute.GET(req('/api/history/1', { signedIn: false }), ctx({ id: '1' }))],
+    ['profile GET', () => profileRoute.GET(req('/api/settings/profile', { signedIn: false }))],
+    ['profile PUT', () => profileRoute.PUT(req('/api/settings/profile', { method: 'PUT', body: { text: 'x' }, signedIn: false }))],
+    ['profile DELETE', () => profileRoute.DELETE(req('/api/settings/profile', { method: 'DELETE', signedIn: false }))],
     ['usage GET', () => usageRoute.GET(req('/api/usage', { signedIn: false }))],
   ])('%s returns 401 without a cookie', async (_n, run) => {
     expect((await run()).status).toBe(401);
@@ -156,5 +160,20 @@ describe('history', () => {
     expect(detail.events.map((e: { action: string }) => e.action)).toContain('queued');
     expect((await detailRoute.GET(req('/api/history/999'), ctx({ id: '999' }))).status).toBe(404);
     expect((await detailRoute.GET(req('/api/history/abc'), ctx({ id: 'abc' }))).status).toBe(404);
+  });
+});
+
+describe('company profile route', () => {
+  test('GET returns the default, PUT saves, DELETE resets; bad input is a 400 and a cross-origin change a 403', async () => {
+    const first = await (await profileRoute.GET(req('/api/settings/profile'))).json();
+    expect(first).toMatchObject({ source: 'default', max: 20000 });
+    expect(first.text.length).toBeGreaterThan(50);
+    const put = await profileRoute.PUT(req('/api/settings/profile', { method: 'PUT', body: { text: 'Our new profile' } }));
+    expect(await put.json()).toMatchObject({ source: 'saved', text: 'Our new profile' });
+    expect((await profileRoute.PUT(req('/api/settings/profile', { method: 'PUT', body: { text: '   ' } }))).status).toBe(400);
+    expect((await profileRoute.PUT(req('/api/settings/profile', { method: 'PUT', body: { nope: 1 } }))).status).toBe(400);
+    expect((await profileRoute.PUT(req('/api/settings/profile', { method: 'PUT', body: { text: 'x' }, headers: { origin: 'https://evil.example' } }))).status).toBe(403);
+    const del = await (await profileRoute.DELETE(req('/api/settings/profile', { method: 'DELETE' }))).json();
+    expect(del.source).toBe('default');
   });
 });

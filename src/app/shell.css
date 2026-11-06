@@ -184,3 +184,8 @@ pre.code { margin: 8px 0 0; padding: 10px 12px; border-radius: 8px; background: 
   .page-head .scan { flex: 1 1 100%; justify-content: space-between; }
   .page-head .controls .btn { flex: 1 1 0; }
 }
+
+/* company profile editor */
+.profile-box { width: 100%; min-height: 280px; resize: vertical; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--wash); color: var(--ink); font: 13.5px/1.6 ui-monospace, Consolas, monospace; }
+.profile-box:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.profile-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; }

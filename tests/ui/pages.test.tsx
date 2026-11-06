@@ -146,6 +146,26 @@ describe('Settings', () => {
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });
 
+  test('the profile editor loads the current text, saves edits, and resets to the default file', async () => {
+    let state = { text: 'Funavry builds software.', source: 'default', max: 20000 };
+    routes({
+      'GET /api/settings': () => json(settings()),
+      'GET /api/usage*': () => json(usage),
+      'GET /api/settings/profile': () => json(state),
+      'PUT /api/settings/profile': (init) => { state = { ...state, source: 'saved', text: JSON.parse(String(init?.body)).text }; return json(state); },
+      'DELETE /api/settings/profile': () => { state = { ...state, source: 'default', text: 'Funavry builds software.' }; return json(state); },
+    });
+    wrap(<SettingsView />);
+    const box = (await screen.findByLabelText('Company profile')) as HTMLTextAreaElement;
+    await waitFor(() => expect(box.value).toBe('Funavry builds software.'));
+    expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
+    fireEvent.change(box, { target: { value: 'We build mobile apps only.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(await screen.findByText('Profile saved. It applies to the next screening and analysis.')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset to default' }));
+    await waitFor(() => expect((screen.getByLabelText('Company profile') as HTMLTextAreaElement).value).toBe('Funavry builds software.'));
+  });
+
   test('key fields are disabled with an explanation when encryption is not configured', async () => {
     routes({ 'GET /api/settings': () => json(settings({ encryptionConfigured: false })), 'GET /api/usage*': () => json(usage) });
     wrap(<SettingsView />);

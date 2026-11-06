@@ -5,6 +5,7 @@ import { api } from '../api-client';
 import { ms, num, usd } from '../fmt';
 import { useToast } from '../Toasts';
 import { useApi } from '../useApi';
+import { ProfileCard } from './ProfileCard';
 
 interface ProviderInfo {
   id: string;
@@ -88,6 +89,7 @@ export function SettingsView() {
         </div>
         <UsageCard key={usageKey} />
       </div>
+      <ProfileCard />
     </>
   );
 }
@@ -96,7 +98,7 @@ const Head = () => (
   <div className="page-head">
     <div>
       <h1>Settings</h1>
-      <p>Choose the AI provider and model, and keep the API keys here instead of in Vercel.</p>
+      <p>Choose the AI provider and model, keep the API keys here instead of in Vercel, and edit the company profile the AI works from.</p>
     </div>
   </div>
 );

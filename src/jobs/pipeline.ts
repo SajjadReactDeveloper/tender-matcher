@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { AiError } from '@/ai/llm';
 import { withAudit } from '@/audit/context';
 import { recordEvent } from '@/audit/store';
@@ -9,6 +7,7 @@ import { appendLog, bumpCounters } from '@/db/queries';
 import { getPendingRows, getTenderRow, insertPending, insertSkipped, knownTenders, markCandidate, markSkipped, rowToListed, saveMatched, updateClosing } from '@/db/tenders';
 import type { Analysis } from '@/domain/types';
 import { redact } from '@/lib/security';
+import { getProfile } from '@/settings/profile';
 import { sources } from '@/sources';
 import { SourceShapeError, type ListedTender, type TenderDetail, type TenderSource } from '@/sources/types';
 import { isFatalAiError } from './errors';
@@ -20,7 +19,7 @@ export interface PipelineDeps {
   screenBatch: (batch: ListedTender[], profile: string) => Promise<Map<string, { relevant: boolean; reason: string }>>;
   analyse: (t: ListedTender, d: TenderDetail, docText: string, profile: string) => Promise<Analysis>;
   readDocuments: (links: TenderDetail['links'], fileUrl: (path: string) => string, maxPages: number, log?: (m: string) => void) => Promise<{ text: string; pages: number }>;
-  profile: () => string;
+  profile: () => string | Promise<string>;
   maxDocPages: number;
 }
 
@@ -29,7 +28,7 @@ export const defaultDeps = (): PipelineDeps => ({
   screenBatch,
   analyse,
   readDocuments,
-  profile: () => readFileSync(join(process.cwd(), 'config', 'profile.md'), 'utf8'),
+  profile: async () => (await getProfile()).text, // the saved profile, else config/profile.md
   // Tender-document pages read per tender (plus 1 advertisement page): each page costs ~2k vision tokens.
   maxDocPages: Number(process.env.MAX_DOC_PAGES) || 4,
 });
@@ -77,7 +76,7 @@ export const screenIds = (runId: number, ids: number[], deps: PipelineDeps): Pro
 async function screenIdsInner(runId: number, ids: number[], deps: PipelineDeps): Promise<number> {
   const rows = await getPendingRows(ids);
   if (!rows.length) return 0;
-  const verdicts = await deps.screenBatch(rows.map(rowToListed), deps.profile());
+  const verdicts = await deps.screenBatch(rows.map(rowToListed), await deps.profile());
   let relevant = 0;
   let judged = 0;
   for (const row of rows) {
@@ -113,7 +112,7 @@ async function analyseRow(runId: number, id: number, row: NonNullable<Awaited<Re
   try {
     const detail = await source.getDetail(row.externalId);
     const docs = await deps.readDocuments(detail.links, source.fileUrl, deps.maxDocPages, (m) => void appendLog(runId, `  ${m}`).catch(() => {}));
-    const analysis = await deps.analyse(listed, detail, docs.text, deps.profile());
+    const analysis = await deps.analyse(listed, detail, docs.text, await deps.profile());
     await saveMatched(id, detail, analysis, docs.pages);
     await bumpCounters(runId, { matched: 1 });
     await appendLog(runId, `  -> ${analysis.relevance}, score ${analysis.score}`);

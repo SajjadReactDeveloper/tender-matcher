@@ -145,3 +145,10 @@ export const auditEvents = pgTable(
   },
   (t) => [index('audit_events_at_idx').on(t.at), index('audit_events_cat_idx').on(t.category, t.at)],
 );
+
+// The company profile edited on the Settings page. One row; no row means the built-in file config/profile.md is used.
+export const appProfile = pgTable('app_profile', {
+  id: integer('id').primaryKey(),
+  text: text('text').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
