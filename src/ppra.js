@@ -1,14 +1,18 @@
 import * as cheerio from 'cheerio';
 
 const BASE = 'https://epms.ppra.gov.pk';
-const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; tender-matcher; internal use)' };
+const MAX_BYTES = 40 * 1024 * 1024;
+const UA ={ 'User-Agent': 'Mozilla/5.0 (compatible; tender-matcher; internal use)' };
 
 const get = async (path, binary = false) => {
   for (let i = 0; ; i++) {
     try {
       const res = await fetch(BASE + path, { headers: UA, signal: AbortSignal.timeout(60000) });
       if (!res.ok) throw new Error(`PPRA ${res.status} for ${path}`);
-      return binary ? Buffer.from(await res.arrayBuffer()) : res.text();
+      if (Number(res.headers.get('content-length')) > MAX_BYTES) throw new Error(`PPRA file too large for ${path}`);
+      const buf = Buffer.from(await res.arrayBuffer()); // ponytail: no streaming cap, chunked responses are checked after download
+      if (buf.length > MAX_BYTES) throw new Error(`PPRA file too large for ${path}`);
+      return binary ? buf : buf.toString('utf8');
     } catch (e) {
       if (i >= 3) throw e;
       await new Promise((r) => setTimeout(r, 1500 * (i + 1)));

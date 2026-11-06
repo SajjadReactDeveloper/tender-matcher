@@ -144,7 +144,28 @@
   .empty { padding:56px 20px; text-align:center; color:var(--mute); }
   .empty b { display:block; color:var(--ink); font:600 18px var(--display); margin-bottom:6px; }
 
+  /* skeleton loader */
+  .sk { display:block; background:linear-gradient(90deg,var(--line) 25%,var(--wash) 37%,var(--line) 63%); background-size:400% 100%; animation:shimmer 1.4s ease infinite; border-radius:6px; }
+  @keyframes shimmer { from { background-position:100% 0; } to { background-position:0 0; } }
+  .sk-row { display:grid; grid-template-columns:52px minmax(0,1.6fr) 130px minmax(0,1.3fr); gap:8px 20px; align-items:start; padding:16px 18px; }
+  .sk-row + .sk-row { border-top:1px solid var(--line); }
+  .sk-row > div { display:flex; flex-direction:column; gap:8px; }
+  .sk.ring-sk { width:46px; height:46px; border-radius:50%; }
+
+  /* error state */
+  .empty.error b { color:var(--urgent); }
+  .empty .btn { margin-top:14px; }
+
+  /* toasts */
+  #toasts { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:10; max-width:min(380px, calc(100vw - 32px)); }
+  .toast { display:flex; gap:10px; align-items:flex-start; background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--high); border-radius:10px; padding:11px 12px 11px 14px; box-shadow:0 6px 20px rgba(0,0,0,.18); font-size:14px; animation:reveal .18s ease-out; }
+  .toast.err { border-left-color:var(--urgent); }
+  .toast span { flex:1; overflow-wrap:anywhere; }
+  .toast button { background:none; border:0; cursor:pointer; color:var(--mute); font-size:18px; line-height:1; padding:0 2px; }
+
   @media (max-width:860px) {
+    .sk-row { grid-template-columns:52px 1fr; }
+    .sk-row > div:nth-child(n+3) { grid-column:2; }
     .row { grid-template-columns:52px 1fr auto; }
     .verdict { grid-column:2 / -1; }
     .detail { grid-template-columns:1fr; }
@@ -164,7 +185,7 @@
     <div class="controls">
       <label class="scan">Scan up to <input type="number" id="limit" value="150" min="1" max="3000"> new tenders</label>
       <button class="btn primary" id="run">Fetch latest tenders</button>
-      <a class="btn" href="/api/export.xlsx" download>Download Excel</a>
+      <button class="btn" id="xlsx" type="button">Download Excel</button>
       <button class="btn theme" id="theme" type="button" aria-label="Switch theme">
         <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg>
@@ -173,7 +194,7 @@
   </header>
 
   <section class="runbar" id="runbar" aria-live="polite">
-    <div class="msg" id="runmsg"></div>
+    <div class="msg" id="runmsg"><span class="sk" style="width:240px;height:14px" aria-label="Loading"></span></div>
     <div><button class="link" id="stop" hidden>Stop run</button> <button class="link" id="logtoggle" hidden>Show log</button></div>
   </section>
   <pre id="log" hidden></pre>
@@ -194,8 +215,9 @@
     <input type="search" id="q" placeholder="Search name, department or scope" aria-label="Search tenders">
   </div>
 
-  <div class="list" id="list"></div>
+  <div class="list" id="list" aria-busy="true"></div>
 </div>
+<div id="toasts" role="region" aria-label="Notifications"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -209,6 +231,37 @@ const whyOf = (t) => (t.recommendation || '').replace(/^\s*(bid|consider|skip)\W
 const colorClass = (r) => (['High', 'Medium'].includes(r) ? r : 'Low');
 
 let tenders = [], openId = null, rel = '', status = { running: false }, lastRaw = '';
+let loading = true, loadError = '', offline = false, wasRunning = false;
+
+// fetch that throws a readable message for network failures and for the server's {error} replies
+async function api(path, opts = {}) {
+  let res;
+  try { res = await fetch(path, opts); } catch { throw new Error('Cannot reach the app. Is it still running?'); }
+  if (!res.ok) {
+    let msg; try { msg = (await res.json()).error; } catch {}
+    throw new Error(msg || `Request failed (${res.status})`);
+  }
+  return res;
+}
+
+function toast(msg, type = 'ok', ms = 4500) {
+  const box = $('toasts');
+  while (box.children.length >= 4) box.firstChild.remove();
+  const el = document.createElement('div');
+  el.className = 'toast' + (type === 'err' ? ' err' : '');
+  el.setAttribute('role', type === 'err' ? 'alert' : 'status');
+  const text = document.createElement('span'); text.textContent = msg;
+  const x = document.createElement('button'); x.type = 'button'; x.setAttribute('aria-label', 'Dismiss'); x.textContent = '×'; x.onclick = () => el.remove();
+  el.append(text, x); box.append(el);
+  setTimeout(() => el.remove(), type === 'err' ? Math.max(ms, 8000) : ms);
+}
+
+const skeletonRows = () => Array.from({ length: 5 }, () => `<div class="sk-row" aria-hidden="true">
+  <span class="sk ring-sk"></span>
+  <div><span class="sk" style="height:16px;width:85%"></span><span class="sk" style="height:12px;width:45%"></span></div>
+  <div><span class="sk" style="height:18px;width:70px"></span><span class="sk" style="height:12px;width:50px"></span></div>
+  <div><span class="sk" style="height:22px;width:56px;border-radius:20px"></span><span class="sk" style="height:12px;width:90%"></span></div>
+</div>`).join('');
 
 function visible() {
   const w = $('when').value, q = $('q').value.toLowerCase().trim(), sort = $('sort').value;
@@ -256,7 +309,9 @@ function itemHtml(t) {
 function renderRunway() {
   const open = tenders.filter((t) => daysLeft(t.lastDate) >= 0);
   const box = $('runwaybox'), svg = $('runway-svg');
-  box.hidden = !open.length;
+  box.hidden = !loading && !open.length;
+  if (loading) { svg.innerHTML = ''; $('runway-note').innerHTML = '<span class="sk" style="height:12px;width:140px"></span>'; svg.style.visibility = 'hidden'; return; }
+  svg.style.visibility = '';
   if (!open.length) return;
   const W = svg.clientWidth || 900, H = 150, pad = 26, base = H - 34, x = (d) => pad + (Math.min(d, SPAN) / SPAN) * (W - pad * 2);
   const slots = {}; let later = 0, out = '';
@@ -278,6 +333,13 @@ function renderRunway() {
 }
 
 function render() {
+  $('list').setAttribute('aria-busy', loading);
+  if (loading) { $('relseg').innerHTML = ''; $('list').innerHTML = skeletonRows(); return renderRunway(); }
+  if (loadError) {
+    $('relseg').innerHTML = '';
+    $('list').innerHTML = `<div class="empty error" role="alert"><b>Could not load tenders</b>${esc(loadError)}<br><button class="btn" id="retry" type="button">Try again</button></div>`;
+    return renderRunway();
+  }
   const base = tenders.filter((t) => { const w = $('when').value, d = daysLeft(t.lastDate); return w === 'all' || d >= 0; });
   renderSeg(base);
   const list = visible().filter((t) => !rel || t.relevance === rel);
@@ -291,7 +353,9 @@ function openTender(id) {
   openId = openId === id ? null : id; render();
   if (openId) { const el = document.querySelector(`.item[data-id="${CSS.escape(id)}"]`); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.classList.add('flash'); }
 }
-$('list').onclick = (e) => { const r = e.target.closest('.row'); if (r) openTender(r.closest('.item').dataset.id); };
+$('list').onclick = (e) => {
+  if (e.target.closest('#retry')) { loading = true; loadError = ''; render(); return refresh(true); }
+  const r = e.target.closest('.row'); if (r) openTender(r.closest('.item').dataset.id); };
 $('runway-svg').onclick = (e) => { const p = e.target.closest('.pin'); if (p) { rel = ''; openTender(p.dataset.id); } };
 $('runway-svg').onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.pin')) { e.preventDefault(); e.target.closest('.pin').dispatchEvent(new MouseEvent('click', { bubbles: true })); } };
 $('relseg').onclick = (e) => { const b = e.target.closest('button'); if (b) { rel = b.dataset.rel; render(); } };
@@ -324,16 +388,46 @@ function paintStatus() {
 
 async function refresh(force) {
   try {
-    status = await (await fetch('/api/status')).json(); paintStatus();
-    if (force || status.running || status.matched !== tenders.length) {
-      const raw = await (await fetch('/api/tenders')).text();
-      if (raw !== lastRaw) { lastRaw = raw; tenders = JSON.parse(raw); render(); } // skip re-render when nothing changed, so open rows and text selection stay put
+    status = await (await api('/api/status')).json();
+    if (offline) { offline = false; toast('Reconnected.'); }
+    if (wasRunning && !status.running) status.error ? toast(`Run stopped: ${status.error}`, 'err') : toast(`Run finished. ${status.matched} matched tenders, ${status.screened} screened.`);
+    wasRunning = status.running; paintStatus();
+    if (force || loading || status.running || status.matched !== tenders.length) {
+      const raw = await (await api('/api/tenders')).text();
+      const first = loading; loading = false; loadError = '';
+      if (raw !== lastRaw || first) { lastRaw = raw; tenders = JSON.parse(raw); render(); } // skip re-render when nothing changed, so open rows and text selection stay put
     }
-  } catch { $('runmsg').textContent = 'Cannot reach the app. Is start.bat still running?'; }
+  } catch (e) {
+    if (!offline) toast(e.message, 'err');
+    offline = true;
+    $('runmsg').textContent = e.message;
+    if (loading) { loading = false; loadError = e.message; render(); }
+  }
 }
-$('run').onclick = async () => { await fetch('/api/run', { method: 'POST', body: JSON.stringify({ limit: $('limit').value }) }); refresh(); };
-$('stop').onclick = () => fetch('/api/stop', { method: 'POST' });
-refresh(true); setInterval(refresh, 2500);
+$('run').onclick = async () => {
+  const limit = Number($('limit').value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 3000) return toast('Enter a whole number from 1 to 3000.', 'err');
+  $('run').disabled = true;
+  try {
+    await api('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit }) });
+    toast(`Run started. Scanning up to ${limit} new tenders.`);
+  } catch (e) { toast(e.message, 'err'); }
+  refresh();
+};
+$('stop').onclick = async () => {
+  try { await api('/api/stop', { method: 'POST' }); toast('Stopping after the current step.'); } catch (e) { toast(e.message, 'err'); }
+};
+$('xlsx').onclick = async () => {
+  const b = $('xlsx'); b.disabled = true; b.textContent = 'Preparing...';
+  try {
+    const url = URL.createObjectURL(await (await api('/api/export.xlsx')).blob());
+    Object.assign(document.createElement('a'), { href: url, download: 'tenders.xlsx' }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Excel file downloaded.');
+  } catch (e) { toast(`Download failed: ${e.message}`, 'err'); }
+  b.disabled = false; b.textContent = 'Download Excel';
+};
+render(); refresh(true); setInterval(refresh, 2500);
 </script>
 </body>
 </html>
