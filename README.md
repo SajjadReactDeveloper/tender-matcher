@@ -58,8 +58,13 @@ Login rate limit (5 per 15 minutes per IP, 20 overall) in Postgres; signed HttpO
 
 `npm test` (Vitest; database tests run against in-process Postgres, no Neon needed), `npm run lint`, `npm run typecheck`, `npm run audit`. GitHub Actions runs all four on every push.
 
+## Deploying
+
+See [docs/DEPLOY.md](docs/DEPLOY.md) for the step-by-step Vercel guide.
+
 ## Known limits
 
+- Vercel caps the number of events (steps) in one Workflow run. A fetch with a very large "Scan up to" can exceed it (`MAX_EVENTS_EXCEEDED`); keep it to a few hundred per run (leftover work resumes on the next run) or set `WORKFLOW_VM=quickjs`.
 - A run whose workflow is lost (for example a killed local server) stays `running` and blocks new fetches until closed manually (`update runs set status = 'cancelled' ...`). No automatic reaper yet.
 - Rate limits for starting runs and exporting are per server instance; the login limit is the database-backed one.
 - Whether `pdf-to-img` (pdf.js + native canvas) runs on Vercel's serverless runtime is unverified until the first deployment; if it does not, send the PDF straight to a PDF-capable model (the change is local to `src/ai/pdf.ts`).
