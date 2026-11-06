@@ -1,0 +1,14 @@
+{
+  "name": "ppra-tender-matcher",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env src/server.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "exceljs": "^4.4.0",
+    "pdf-to-img": "^7.0.1"
+  }
+}
