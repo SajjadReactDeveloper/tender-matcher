@@ -28,7 +28,7 @@ describe('GET /api/tenders', () => {
     expect(body.map((t: { name: string }) => t.name)).toEqual(['Newer', 'Other source', 'Older']);
     expect(body[2]).toMatchObject({
       source: 'ppra', name: 'Older', department: 'Org A', postingDate: '2026-11-01', lastDate: '2026-11-20', refNo: 'R-A', url: 'https://x/A',
-      relevance: 'High', score: 80, recommendation: 'Bid - fits', docs: { tender: '/pdf?file=t', pagesRead: 3 },
+      relevance: 'High', score: 80, recommendation: 'Bid - fits', docs: { tender: 'https://epms.ppra.gov.pk/pdf?file=t', pagesRead: 3 },
     });
   });
 
