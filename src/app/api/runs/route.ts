@@ -1,5 +1,6 @@
 import { start } from 'workflow/api';
 import { z } from 'zod';
+import { pruneAudit } from '@/audit/store';
 import { createRun, finishRun, getCurrentRun, setWorkflowRunId } from '@/db/queries';
 import { fetchRunWorkflow } from '@/jobs/fetch-run';
 import { requireSession } from '@/lib/auth/require-session';
@@ -17,6 +18,7 @@ export async function POST(req: Request): Promise<Response> {
     const { limit } = parsed.data;
 
     const run = await createRun(limit); // 409 if a run is already active
+    void pruneAudit(); // keep the audit tables to 180 days; never blocks or fails the run
     try {
       const wf = await start(fetchRunWorkflow, [run.id, limit]);
       await setWorkflowRunId(run.id, wf.runId);

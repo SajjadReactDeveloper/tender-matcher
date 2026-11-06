@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { createTestDb } from '../helpers/test-db';
 import { cleanText, parseDetail, parseListing } from '@/sources/ppra/parse';
 import { SourceShapeError } from '@/sources/types';
 import { fetchBuffer } from '@/sources/http';
@@ -54,6 +55,9 @@ describe('cleanText', () => {
 });
 
 describe('fetchBuffer', () => {
+  beforeEach(async () => {
+    await createTestDb();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   test('rejects a download whose Content-Length exceeds 40 MB without reading it', async () => {

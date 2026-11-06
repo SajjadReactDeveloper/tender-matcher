@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AiError } from '@/ai/llm';
+import { withAudit } from '@/audit/context';
+import { recordEvent } from '@/audit/store';
 import { analyse, screenBatch } from '@/ai/prompts';
 import { readDocuments } from '@/ai/pdf';
 import { appendLog, bumpCounters } from '@/db/queries';
@@ -40,7 +42,10 @@ const sourceOf = (deps: PipelineDeps, id: string): TenderSource => {
 
 // Reads ONE listing page: saves up to `remaining` unseen tenders as pending, applies corrigendum date changes to known ones.
 // One page per workflow step keeps each step short and lets Stop take effect between pages.
-export async function scanPage(runId: number, sourceId: string, page: number, remaining: number, deps: PipelineDeps): Promise<ScanPageResult> {
+export const scanPage = (runId: number, sourceId: string, page: number, remaining: number, deps: PipelineDeps): Promise<ScanPageResult> =>
+  withAudit({ runId }, () => scanPageInner(runId, sourceId, page, remaining, deps));
+
+async function scanPageInner(runId: number, sourceId: string, page: number, remaining: number, deps: PipelineDeps): Promise<ScanPageResult> {
   const source = sourceOf(deps, sourceId);
   if (page === 1) await appendLog(runId, `Scanning ${source.name} for new tenders...`);
   const { total, tenders } = await source.listPage(page);
@@ -62,11 +67,14 @@ export async function scanPage(runId: number, sourceId: string, page: number, re
   }
   const added = await insertPending(source.id, fresh);
   await appendLog(runId, `  page ${page}: ${tenders.length} listed, ${added} new (${total} active in total)`);
+  await recordEvent({ category: 'run', action: 'page-scanned', status: 'ok', runId, ref: source.id, details: { source: source.id, page, listed: tenders.length, added, total } });
   return { added, pages: page === 1 ? Math.max(1, Math.ceil(total / tenders.length)) : null, done: false };
 }
 
 // Quick yes/no on the listing fields. Returns how many looked relevant. Tenders without a verdict stay pending for the next run.
-export async function screenIds(runId: number, ids: number[], deps: PipelineDeps): Promise<number> {
+export const screenIds = (runId: number, ids: number[], deps: PipelineDeps): Promise<number> => withAudit({ runId }, () => screenIdsInner(runId, ids, deps));
+
+async function screenIdsInner(runId: number, ids: number[], deps: PipelineDeps): Promise<number> {
   const rows = await getPendingRows(ids);
   if (!rows.length) return 0;
   const verdicts = await deps.screenBatch(rows.map(rowToListed), deps.profile());
@@ -85,6 +93,7 @@ export async function screenIds(runId: number, ids: number[], deps: PipelineDeps
   }
   await bumpCounters(runId, { screened: judged });
   await appendLog(runId, `  screened ${judged} of ${rows.length}, ${relevant} look relevant`);
+  await recordEvent({ category: 'run', action: 'screened', status: 'ok', runId, details: { requested: rows.length, judged, relevant } });
   return relevant;
 }
 
@@ -94,6 +103,10 @@ export async function screenIds(runId: number, ids: number[], deps: PipelineDeps
 export async function analyseTender(runId: number, id: number, deps: PipelineDeps): Promise<void> {
   const row = await getTenderRow(id);
   if (!row || row.decision !== 'candidate') return;
+  return withAudit({ runId, tender: row.externalId }, () => analyseRow(runId, id, row, deps));
+}
+
+async function analyseRow(runId: number, id: number, row: NonNullable<Awaited<ReturnType<typeof getTenderRow>>>, deps: PipelineDeps): Promise<void> {
   const source = sourceOf(deps, row.source);
   const listed = rowToListed(row);
   await appendLog(runId, `Reading ${row.externalId} ${row.title}`);
@@ -104,10 +117,12 @@ export async function analyseTender(runId: number, id: number, deps: PipelineDep
     await saveMatched(id, detail, analysis, docs.pages);
     await bumpCounters(runId, { matched: 1 });
     await appendLog(runId, `  -> ${analysis.relevance}, score ${analysis.score}`);
+    await recordEvent({ category: 'run', action: 'analysed', status: 'ok', runId, ref: row.externalId, details: { relevance: analysis.relevance, score: analysis.score, pages: docs.pages } });
   } catch (e) {
     if (e instanceof AiError && !e.retryable && !isFatalAiError(e)) {
       await markSkipped(id, redact(`analysis failed: ${e.message}`).slice(0, 300)); // AiError already redacts; kept here so the stored text never depends on that
       await appendLog(runId, `  skipped: analysis failed (${e.message})`);
+      await recordEvent({ category: 'run', action: 'analysis-skipped', status: 'error', runId, ref: row.externalId, details: { error: e.message } });
       return;
     }
     throw e;

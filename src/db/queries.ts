@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { recordEvent } from '@/audit/store';
 import { HttpError, redact } from '@/lib/security';
 import { getDb, withRetry } from './client';
 import { runLogs, runs } from './schema';
@@ -17,6 +18,7 @@ const isUniqueViolation = (e: unknown): boolean => {
 export async function createRun(limit: number): Promise<Run> {
   try {
     const [run] = await getDb().insert(runs).values({ limit }).returning();
+    await recordEvent({ category: 'run', action: 'queued', status: 'info', runId: run.id, details: { limit } });
     return run;
   } catch (e) {
     if (isUniqueViolation(e)) throw new HttpError(409, 'A run is already in progress');
@@ -30,13 +32,16 @@ export async function setWorkflowRunId(runId: number, workflowRunId: string): Pr
 
 export async function markRunning(runId: number): Promise<void> {
   // Only a queued run starts: a straggling workflow cannot revive a run that was already closed.
-  await withRetry(() => getDb().update(runs).set({ status: 'running' }).where(and(eq(runs.id, runId), eq(runs.status, 'queued'))));
+  const started = await withRetry(() => getDb().update(runs).set({ status: 'running' }).where(and(eq(runs.id, runId), eq(runs.status, 'queued'))).returning({ id: runs.id }));
+  if (started.length) await recordEvent({ category: 'run', action: 'started', status: 'info', runId });
 }
 
 export async function finishRun(runId: number, status: 'completed' | 'failed' | 'cancelled', error?: string): Promise<void> {
-  await withRetry(() =>
-    getDb().update(runs).set({ status, finishedAt: sql`now()`, error: error ? redact(error).slice(0, 1000) : null }).where(and(eq(runs.id, runId), inArray(runs.status, [...ACTIVE]))), // never overwrite a run that is already finished
+  const message = error ? redact(error).slice(0, 1000) : null;
+  const closed = await withRetry(() =>
+    getDb().update(runs).set({ status, finishedAt: sql`now()`, error: message }).where(and(eq(runs.id, runId), inArray(runs.status, [...ACTIVE]))).returning({ id: runs.id, screened: runs.screened, matched: runs.matched }), // never overwrite a run that is already finished
   );
+  if (closed.length) await recordEvent({ category: 'run', action: status, status: status === 'failed' ? 'error' : status === 'completed' ? 'ok' : 'info', runId, details: { screened: closed[0].screened, matched: closed[0].matched, error: message } });
 }
 
 // Stop is two-step. The first call flags the active run (the workflow checks the flag between steps). If the run is still
@@ -45,10 +50,12 @@ export async function requestStop(): Promise<{ run: Run; forced: boolean } | nul
   const [active] = await withRetry(() => getDb().select().from(runs).where(inArray(runs.status, [...ACTIVE])).orderBy(desc(runs.id)).limit(1));
   if (!active) return null;
   if (active.stopRequested) {
+    await recordEvent({ category: 'run', action: 'force-stopped', status: 'info', runId: active.id });
     await finishRun(active.id, 'cancelled', 'Stopped manually');
     return { run: { ...active, status: 'cancelled' }, forced: true };
   }
   await withRetry(() => getDb().update(runs).set({ stopRequested: true }).where(eq(runs.id, active.id)));
+  await recordEvent({ category: 'run', action: 'stop-requested', status: 'info', runId: active.id });
   return { run: { ...active, stopRequested: true }, forced: false };
 }
 

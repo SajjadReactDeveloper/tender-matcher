@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { recordEvent } from '@/audit/store';
 import { verifyPassword } from './password';
 import { releaseLoginAttempt, reserveLoginAttempt } from './rate-limit';
 import { createSession } from './session';
@@ -16,19 +17,26 @@ export const clientIp = (h: Headers): string => {
 };
 
 // The one fixed login. Wrong email and wrong password are indistinguishable (same message, both checks always run).
-export async function attemptLogin({ email, password, ip }: { email: string; password: string; ip: string }): Promise<LoginResult> {
+export async function attemptLogin({ email, password, ip, userAgent }: { email: string; password: string; ip: string; userAgent?: string }): Promise<LoginResult> {
   const expectedEmail = process.env.APP_EMAIL;
   const hash = process.env.APP_PASSWORD_HASH;
   if (!expectedEmail || !hash) throw new Error('APP_EMAIL and APP_PASSWORD_HASH must be set');
   if (!email.trim() || !password) return { ok: false, error: 'Enter your email and password.' };
 
   const attempt = await reserveLoginAttempt(ip);
-  if (!attempt.allowed) return { ok: false, error: 'Too many failed attempts. Try again in 15 minutes.' };
+  if (!attempt.allowed) {
+    await recordEvent({ category: 'auth', action: 'login-blocked', status: 'error', details: { ip, userAgent } });
+    return { ok: false, error: 'Too many failed attempts. Try again in 15 minutes.' };
+  }
 
   const emailOk = sameText(email.trim().toLowerCase(), expectedEmail.trim().toLowerCase());
   const passwordOk = await verifyPassword(password, hash);
-  if (!emailOk || !passwordOk) return { ok: false, error: 'Invalid email or password.' };
+  if (!emailOk || !passwordOk) {
+    await recordEvent({ category: 'auth', action: 'login-failed', status: 'error', details: { ip, userAgent, emailMatched: emailOk } }); // never the typed email or password
+    return { ok: false, error: 'Invalid email or password.' };
+  }
 
   await releaseLoginAttempt(attempt.id);
+  await recordEvent({ category: 'auth', action: 'login-ok', status: 'ok', details: { ip, userAgent } });
   return { ok: true, token: await createSession(expectedEmail.trim().toLowerCase()) };
 }
