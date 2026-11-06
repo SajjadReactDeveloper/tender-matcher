@@ -3,7 +3,7 @@ import { recordEvent } from '@/audit/store';
 import { getDb, withRetry } from '@/db/client';
 import { apiKeys, settings } from '@/db/schema';
 import { decryptSecret, encryptSecret, encryptionConfigured } from '@/lib/crypto';
-import { HttpError } from '@/lib/security';
+import { HttpError, registerSecret } from '@/lib/security';
 import { PROVIDERS, PROVIDER_IDS, isProvider, type Provider } from './models';
 
 export type KeySource = 'dashboard' | 'env' | 'none';
@@ -28,7 +28,9 @@ async function resolveKey(provider: Provider): Promise<{ source: KeySource; key:
   const [row] = await withRetry(() => getDb().select().from(apiKeys).where(eq(apiKeys.provider, provider)));
   if (row) {
     try {
-      return { source: 'dashboard', key: decryptSecret(row, provider), last4: row.last4 };
+      const key = decryptSecret(row, provider);
+      registerSecret(key);
+      return { source: 'dashboard', key, last4: row.last4 };
     } catch {
       /* fall through to env */
     }

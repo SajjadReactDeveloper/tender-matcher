@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { HttpError, assertSameOrigin, errorResponse, rateLimit, readJsonBody, securityHeaders } from '@/lib/security';
+import { HttpError, redact, assertSameOrigin, errorResponse, rateLimit, readJsonBody, securityHeaders } from '@/lib/security';
 
 const post = (body: BodyInit | null, headers: Record<string, string> = {}) =>
   new Request('https://app.example.com/api/runs', { method: 'POST', body, headers: { host: 'app.example.com', ...headers } });
@@ -103,5 +103,14 @@ describe('rateLimit', () => {
       expect((e as HttpError).headers['Retry-After']).toBeDefined();
     }
     expect(() => rateLimit('k2', 3)).not.toThrow();
+  });
+});
+
+
+describe('registered secrets', () => {
+  test('redact removes a registered secret even when it has no recognizable key shape', async () => {
+    const { registerSecret } = await import('@/lib/security');
+    registerSecret('Zk93-plain-looking-secret-value');
+    expect(redact('provider said: bad key Zk93-plain-looking-secret-value!')).toBe('provider said: bad key [redacted]!');
   });
 });

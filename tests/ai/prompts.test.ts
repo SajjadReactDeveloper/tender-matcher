@@ -3,8 +3,10 @@ import { analyse, screenBatch } from '@/ai/prompts';
 import { readDocuments } from '@/ai/pdf';
 import type { ListedTender, TenderDetail } from '@/sources/types';
 import { stubAiReply } from '../helpers/ai';
+import { createTestDb } from '../helpers/test-db';
 
-beforeEach(() => {
+beforeEach(async () => {
+  await createTestDb();
   vi.stubEnv('AI_PROVIDER', 'groq');
   vi.stubEnv('GROQ_API_KEY', 'test-groq-key-1234567890');
 });

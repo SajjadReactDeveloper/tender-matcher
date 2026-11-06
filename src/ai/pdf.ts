@@ -37,6 +37,7 @@ export async function readDocuments(
   let text = '';
   for (let i = 0; i < images.length; i += 3) {
     text += '\n' + (await chat({
+      purpose: 'read-pages',
       system: 'You read scanned tender documents.',
       user: 'Extract the key content of these scanned tender pages as compact notes (max 300 words): what is being procured, items and quantities, technical specifications, eligibility and certificates, fees and securities, dates, delivery terms. Skip boilerplate. No commentary.',
       images: images.slice(i, i + 3),

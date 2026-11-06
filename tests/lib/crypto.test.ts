@@ -28,6 +28,12 @@ describe('crypto', () => {
     expect(() => decryptSecret(p, 'groq')).toThrow();
   });
 
+  test('a truncated auth tag or a wrong-length iv is rejected before decrypting', () => {
+    const p = encryptSecret('gsk_supersecretvalue1234', 'groq');
+    expect(() => decryptSecret({ ...p, tag: Buffer.from(p.tag, 'base64').subarray(0, 4).toString('base64') }, 'groq')).toThrow(/tag/);
+    expect(() => decryptSecret({ ...p, iv: Buffer.alloc(8).toString('base64') }, 'groq')).toThrow(/iv/);
+  });
+
   test('a missing or wrong-length key refuses to encrypt with a 503 and reports not configured', () => {
     for (const bad of ['', 'dG9vLXNob3J0']) {
       vi.stubEnv('SETTINGS_ENCRYPTION_KEY', bad);

@@ -1,6 +1,14 @@
 // Provider errors can echo key fragments: strip env secrets and key-shaped tokens before anything is logged or shown.
+// Secrets that are not in the environment (API keys saved on the dashboard) are registered when they are read, so redact() strips
+// the exact value whatever its format. Kept in memory only.
+const registered = new Set<string>();
+export function registerSecret(value: string): void {
+  if (value.length >= 8) registered.add(value);
+}
+
 export function redact(input: string): string {
   let out = String(input);
+  for (const v of registered) out = out.split(v).join('[redacted]');
   for (const [name, value] of Object.entries(process.env)) {
     if (/KEY|TOKEN|SECRET|PASSWORD|DATABASE_URL|DIRECT_URL/i.test(name) && value && value.length >= 8) out = out.split(value).join('[redacted]');
   }
