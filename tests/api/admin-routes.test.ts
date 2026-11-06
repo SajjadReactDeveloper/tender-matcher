@@ -20,7 +20,7 @@ const req = (path: string, init: { method?: string; body?: unknown; headers?: Re
     headers: { ...H, ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}), ...(init.signedIn === false ? {} : auth), ...init.headers },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
-const ctx = (p: Record<string, string>) => ({ params: Promise.resolve(p) });
+const ctx = <T extends Record<string, string>>(p: T) => ({ params: Promise.resolve(p) });
 const call = (over = {}) => ({ purpose: 'screen' as const, provider: 'groq', model: 'm', attempt: 1, status: 'ok' as const, images: 0, promptChars: 1, replyChars: 1, latencyMs: 5, ...over });
 
 beforeEach(async () => {
