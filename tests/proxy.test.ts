@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { proxy } from '@/proxy';
+import { config, proxy } from '@/proxy';
 import { SESSION_COOKIE, createSession } from '@/lib/auth/session';
 
 beforeEach(() => vi.stubEnv('SESSION_SECRET', 'a'.repeat(40)));
@@ -46,5 +46,18 @@ describe('proxy', () => {
   test('error responses from the proxy also carry the security headers', async () => {
     const res = await proxy(req('/api/tenders'));
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+});
+
+describe('proxy matcher', () => {
+  const pattern = new RegExp('^' + config.matcher[0] + '$');
+
+  test('does not intercept the Workflow runtime paths or static assets, but does cover pages and the API', () => {
+    expect(pattern.test('/.well-known/workflow/v1/flow')).toBe(false);
+    expect(pattern.test('/_next/static/chunk.js')).toBe(false);
+    expect(pattern.test('/logo.svg')).toBe(false);
+    expect(pattern.test('/')).toBe(true);
+    expect(pattern.test('/api/runs')).toBe(true);
+    expect(pattern.test('/login')).toBe(true);
   });
 });

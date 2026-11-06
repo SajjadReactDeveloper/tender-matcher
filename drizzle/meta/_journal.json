@@ -8,6 +8,13 @@
       "when": 1793970858828,
       "tag": "0000_unusual_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793974218338,
+      "tag": "0001_mute_stingray",
+      "breakpoints": true
     }
   ]
 }

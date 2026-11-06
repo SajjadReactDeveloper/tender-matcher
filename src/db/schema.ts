@@ -7,9 +7,12 @@ export const tenders = pgTable(
     id: serial('id').primaryKey(),
     source: text('source').notNull(),
     externalId: text('external_id').notNull(),
-    decision: text('decision', { enum: ['matched', 'skipped'] }).notNull(),
+    // pending: scanned, not screened yet; candidate: passed screening, not analysed yet
+    decision: text('decision', { enum: ['pending', 'candidate', 'matched', 'skipped'] }).notNull(),
     skipReason: text('skip_reason'),
     title: text('title').notNull(),
+    note: text('note'),
+    description: text('description'),
     organization: text('organization'),
     office: text('office'),
     location: text('location'),
