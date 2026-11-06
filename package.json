@@ -45,5 +45,11 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "overrides": {
+    "zod": "^4.6.7",
+    "undici": "^7.30.2",
+    "@vercel/oidc": "^4.0.6",
+    "@vercel/cli-auth": "^0.3.15"
   }
 }
