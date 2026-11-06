@@ -1,4 +1,4 @@
-import type { PipelineDeps } from '@/jobs/pipeline';
+import { scanPage, type PipelineDeps } from '@/jobs/pipeline';
 import type { ListedTender, TenderDetail, TenderSource } from '@/sources/types';
 
 export const listed = (id: string, over: Partial<ListedTender> = {}): ListedTender => ({
@@ -36,4 +36,19 @@ export function fakeDeps(source: TenderSource, relevant: string[], over: Partial
     maxDocPages: 4,
     ...over,
   };
+}
+
+// Walks a source page by page the way orchestrate() does, for tests that only care about the stored result.
+export async function scanAll(runId: number, sourceId: string, limit: number, deps: PipelineDeps): Promise<number> {
+  let added = 0;
+  let page = 1;
+  let pages = Infinity;
+  while (added < limit && page <= pages) {
+    const r = await scanPage(runId, sourceId, page, limit - added, deps);
+    if (r.pages !== null) pages = r.pages;
+    added += r.added;
+    if (r.done) break;
+    page++;
+  }
+  return added;
 }

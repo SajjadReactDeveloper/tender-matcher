@@ -24,6 +24,12 @@ describe('parseListing', () => {
   });
 });
 
+describe('parseListing on a later page', () => {
+  test('an empty page is the end of the listing when the caller expects it (a page after the first)', () => {
+    expect(parseListing(fixture('empty.html'), { allowEmpty: true })).toEqual({ total: 0, tenders: [] });
+  });
+});
+
 describe('parseDetail', () => {
   test('finds the tender document and advertisement links', () => {
     const d = parseDetail(fixture('detail.html'));

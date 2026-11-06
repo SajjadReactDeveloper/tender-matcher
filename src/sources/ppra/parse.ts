@@ -12,7 +12,7 @@ const toIso = (s: string): string => {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
 };
 
-export function parseListing(html: string): { total: number; tenders: ListedTender[] } {
+export function parseListing(html: string, { allowEmpty = false }: { allowEmpty?: boolean } = {}): { total: number; tenders: ListedTender[] } {
   const $ = cheerio.load(html);
   const total = Number(html.match(/of\s+([\d,]+)\s+tenders/)?.[1].replace(/,/g, '')) || 0;
   const tenders: ListedTender[] = [];
@@ -47,7 +47,8 @@ export function parseListing(html: string): { total: number; tenders: ListedTend
       url: `${PPRA_BASE}/public/tenders/tender-details/${externalId}`,
     });
   });
-  if (!tenders.length) throw new SourceShapeError('source returned no tenders');
+  // An empty first page means the site changed; an empty later page just means the listing shrank while we were reading it.
+  if (!tenders.length && !allowEmpty) throw new SourceShapeError('source returned no tenders');
   return { total, tenders };
 }
 

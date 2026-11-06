@@ -23,8 +23,16 @@ describe('runs', () => {
     const run = await createRun(5);
     await markRunning(run.id);
     expect(await isStopRequested(run.id)).toBe(false);
-    expect((await requestStop())?.id).toBe(run.id);
+    expect((await requestStop())?.run.id).toBe(run.id);
     expect(await isStopRequested(run.id)).toBe(true);
+  });
+
+  test('a run that is already finished stays finished: a straggling workflow cannot revive or overwrite it', async () => {
+    const run = await createRun(5);
+    await finishRun(run.id, 'cancelled', 'Stopped manually');
+    await markRunning(run.id);
+    await finishRun(run.id, 'completed');
+    expect((await getCurrentRun())?.run).toMatchObject({ status: 'cancelled', error: 'Stopped manually' });
   });
 
   test('finishRun records status, error and finish time', async () => {

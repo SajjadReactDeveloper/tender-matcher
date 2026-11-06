@@ -1,9 +1,15 @@
 // Pure control flow for a fetch run. Every unit of work is an injected function (a workflow step in production),
 // so this file must stay free of Node APIs: it runs inside the workflow sandbox.
+export interface ScanPageResult {
+  added: number;
+  pages: number | null; // total listing pages, reported by page 1 only
+  done: boolean; // the listing has no more rows
+}
+
 export interface RunIo {
   markRunning(runId: number): Promise<void>;
   listSourceIds(): Promise<string[]>;
-  scan(runId: number, sourceId: string, limit: number): Promise<number>;
+  scanPage(runId: number, sourceId: string, page: number, remaining: number): Promise<ScanPageResult>;
   pendingIds(limit: number): Promise<number[]>;
   shouldStop(runId: number): Promise<boolean>;
   screen(runId: number, ids: number[]): Promise<void>;
@@ -20,8 +26,16 @@ export async function orchestrate(io: RunIo, runId: number, limit: number): Prom
   try {
     await io.markRunning(runId);
     for (const sourceId of await io.listSourceIds()) {
-      if (await io.shouldStop(runId)) return await io.finish(runId, 'cancelled');
-      await io.scan(runId, sourceId, limit);
+      // One workflow step per listing page: each stays short and Stop is honoured between pages.
+      let remaining = limit;
+      let pages = Infinity;
+      for (let page = 1; remaining > 0 && page <= pages; page++) {
+        if (await io.shouldStop(runId)) return await io.finish(runId, 'cancelled');
+        const r = await io.scanPage(runId, sourceId, page, remaining);
+        if (r.pages !== null) pages = r.pages;
+        remaining -= r.added;
+        if (r.done) break;
+      }
     }
 
     const pending = await io.pendingIds(limit);

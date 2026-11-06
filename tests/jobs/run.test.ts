@@ -7,7 +7,7 @@ import { buildIo } from '@/jobs/io';
 import { orchestrate } from '@/jobs/orchestrate';
 import { SourceShapeError } from '@/sources/types';
 import { createTestDb } from '../helpers/test-db';
-import { fakeDeps, fakeSource } from '../helpers/fakes';
+import { fakeDeps, fakeSource, scanAll } from '../helpers/fakes';
 
 let db: Db;
 beforeEach(async () => {
@@ -43,7 +43,7 @@ describe('a full run with a fake source and fake AI', () => {
     const deps = fakeDeps(src, ['T001', 'T002']);
     const io = buildIo(deps);
     const first = await createRun(100);
-    await io.scan(first.id, 'fake', 100);
+    await scanAll(first.id, 'fake', 100, deps);
     await io.screen(first.id, await io.pendingIds(100).then((ids) => ids.slice(0, 3))); // run died after screening 3
     await db.update(runs).set({ status: 'failed' }).where(eq(runs.id, first.id));
     await orchestrate(buildIo(deps), (await createRun(100)).id, 100);

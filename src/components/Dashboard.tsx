@@ -137,8 +137,9 @@ function DashboardInner({ signOut }: { signOut?: ReactNode }) {
 
   const stop = async () => {
     try {
-      await api('/api/runs/stop', { method: 'POST' });
-      toast('Stopping after the current step.');
+      const { forced } = (await (await api('/api/runs/stop', { method: 'POST' })).json()) as { forced: boolean };
+      toast(forced ? 'Run force-stopped.' : 'Stopping after the current step. Press Force stop if it does not stop.');
+      void poll();
     } catch (e) {
       toast(message(e), 'err');
     }

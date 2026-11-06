@@ -1,4 +1,4 @@
-import { desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { HttpError, redact } from '@/lib/security';
 import { getDb, withRetry } from './client';
 import { runLogs, runs } from './schema';
@@ -29,19 +29,27 @@ export async function setWorkflowRunId(runId: number, workflowRunId: string): Pr
 }
 
 export async function markRunning(runId: number): Promise<void> {
-  await withRetry(() => getDb().update(runs).set({ status: 'running' }).where(eq(runs.id, runId)));
+  // Only a queued run starts: a straggling workflow cannot revive a run that was already closed.
+  await withRetry(() => getDb().update(runs).set({ status: 'running' }).where(and(eq(runs.id, runId), eq(runs.status, 'queued'))));
 }
 
 export async function finishRun(runId: number, status: 'completed' | 'failed' | 'cancelled', error?: string): Promise<void> {
   await withRetry(() =>
-    getDb().update(runs).set({ status, finishedAt: sql`now()`, error: error ? redact(error).slice(0, 1000) : null }).where(eq(runs.id, runId)),
+    getDb().update(runs).set({ status, finishedAt: sql`now()`, error: error ? redact(error).slice(0, 1000) : null }).where(and(eq(runs.id, runId), inArray(runs.status, [...ACTIVE]))), // never overwrite a run that is already finished
   );
 }
 
-// Flags the active run, if any. The workflow checks the flag between steps.
-export async function requestStop(): Promise<Run | null> {
-  const [run] = await withRetry(() => getDb().update(runs).set({ stopRequested: true }).where(inArray(runs.status, [...ACTIVE])).returning());
-  return run ?? null;
+// Stop is two-step. The first call flags the active run (the workflow checks the flag between steps). If the run is still
+// active and already flagged, the workflow is not responding (lost or crashed), so the second call closes it directly.
+export async function requestStop(): Promise<{ run: Run; forced: boolean } | null> {
+  const [active] = await withRetry(() => getDb().select().from(runs).where(inArray(runs.status, [...ACTIVE])).orderBy(desc(runs.id)).limit(1));
+  if (!active) return null;
+  if (active.stopRequested) {
+    await finishRun(active.id, 'cancelled', 'Stopped manually');
+    return { run: { ...active, status: 'cancelled' }, forced: true };
+  }
+  await withRetry(() => getDb().update(runs).set({ stopRequested: true }).where(eq(runs.id, active.id)));
+  return { run: { ...active, stopRequested: true }, forced: false };
 }
 
 export async function isStopRequested(runId: number): Promise<boolean> {

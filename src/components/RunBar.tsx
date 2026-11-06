@@ -8,6 +8,7 @@ export interface RunSummary {
   screened: number;
   matched: number;
   error: string | null;
+  stopRequested?: boolean;
 }
 export interface LogLine {
   at: string;
@@ -54,7 +55,7 @@ export function RunBar({ loading, run, logs, matchedTotal, offline, onStop }: Pr
         <div>
           {active && (
             <button type="button" className="link" onClick={onStop}>
-              Stop run
+              {run?.stopRequested ? 'Force stop' : 'Stop run'}
             </button>
           )}{' '}
           {logs.length > 0 && (

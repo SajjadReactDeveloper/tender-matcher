@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { analyse } from '@/ai/prompts';
-import { screenBatch } from '@/ai/prompts';
+import { AiError } from '@/ai/llm';
+import { analyse, screenBatch } from '@/ai/prompts';
 import { readDocuments } from '@/ai/pdf';
-import { appendLog, bumpCounters, isStopRequested } from '@/db/queries';
+import { appendLog, bumpCounters } from '@/db/queries';
 import { getPendingRows, getTenderRow, insertPending, insertSkipped, knownTenders, markCandidate, markSkipped, rowToListed, saveMatched, updateClosing } from '@/db/tenders';
 import type { Analysis } from '@/domain/types';
 import { sources } from '@/sources';
-import type { ListedTender, TenderDetail, TenderSource } from '@/sources/types';
+import { SourceShapeError, type ListedTender, type TenderDetail, type TenderSource } from '@/sources/types';
+import { isFatalAiError } from './errors';
+import type { ScanPageResult } from './orchestrate';
 
 // Everything the pipeline needs from the outside world, so tests can swap the sources and the AI for fakes.
 export interface PipelineDeps {
@@ -35,34 +37,31 @@ const sourceOf = (deps: PipelineDeps, id: string): TenderSource => {
   return s;
 };
 
-// Reads listing pages newest first and saves unseen tenders as pending until `limit` are found or the pages run out.
-export async function scanSource(runId: number, sourceId: string, limit: number, deps: PipelineDeps): Promise<number> {
+// Reads ONE listing page: saves up to `remaining` unseen tenders as pending, applies corrigendum date changes to known ones.
+// One page per workflow step keeps each step short and lets Stop take effect between pages.
+export async function scanPage(runId: number, sourceId: string, page: number, remaining: number, deps: PipelineDeps): Promise<ScanPageResult> {
   const source = sourceOf(deps, sourceId);
-  const known = await knownTenders(source.id);
-  let added = 0;
-  let pages = Infinity;
-  await appendLog(runId, `Scanning ${source.name} for new tenders (up to ${limit})...`);
-  for (let page = 1; page <= pages && added < limit; page++) {
-    if (page > 1 && (await isStopRequested(runId))) break;
-    const { total, tenders } = await source.listPage(page);
-    if (page === 1) pages = Math.max(1, Math.ceil(total / tenders.length));
-    const fresh: ListedTender[] = [];
-    for (const t of tenders) {
-      const seen = known.get(t.externalId);
-      if (seen) {
-        if ((t.closing || null) !== seen.closingDate || (t.closingTime || null) !== seen.closingTime) await updateClosing(source.id, t); // corrigendum moved the date
-      } else if (/cancel/i.test(t.status)) {
-        await insertSkipped(source.id, t, 'cancelled');
-        known.set(t.externalId, { closingDate: null, closingTime: null });
-      } else if (added + fresh.length < limit) {
-        fresh.push(t);
-        known.set(t.externalId, { closingDate: t.closing || null, closingTime: t.closingTime || null });
-      }
-    }
-    added += await insertPending(source.id, fresh);
-    await appendLog(runId, `  page ${page}: ${tenders.length} listed, ${added} new so far (${total} active in total)`);
+  if (page === 1) await appendLog(runId, `Scanning ${source.name} for new tenders...`);
+  const { total, tenders } = await source.listPage(page);
+  if (!tenders.length) {
+    if (page === 1) throw new SourceShapeError('source returned no tenders');
+    return { added: 0, pages: null, done: true }; // the listing shrank while we were reading it
   }
-  return added;
+  const known = await knownTenders(source.id, tenders.map((t) => t.externalId));
+  const fresh: ListedTender[] = [];
+  for (const t of tenders) {
+    const seen = known.get(t.externalId);
+    if (seen) {
+      if ((t.closing || null) !== seen.closingDate || (t.closingTime || null) !== seen.closingTime) await updateClosing(source.id, t); // corrigendum moved the date
+    } else if (/cancel/i.test(t.status)) {
+      await insertSkipped(source.id, t, 'cancelled');
+    } else if (fresh.length < remaining) {
+      fresh.push(t);
+    }
+  }
+  const added = await insertPending(source.id, fresh);
+  await appendLog(runId, `  page ${page}: ${tenders.length} listed, ${added} new (${total} active in total)`);
+  return { added, pages: page === 1 ? Math.max(1, Math.ceil(total / tenders.length)) : null, done: false };
 }
 
 // Quick yes/no on the listing fields. Returns how many looked relevant. Tenders without a verdict stay pending for the next run.
@@ -88,17 +87,28 @@ export async function screenIds(runId: number, ids: number[], deps: PipelineDeps
   return relevant;
 }
 
-// Reads the documents and scores one candidate. A rate limit or AI error propagates and leaves the row a candidate.
+// Reads the documents and scores one candidate. A rate limit, a transient AI error or a rejected key propagates and leaves
+// the row a candidate. An AI error that can never succeed for THIS tender (for example the request is too large) closes it as
+// skipped, so it does not burn the quota again on every run.
 export async function analyseTender(runId: number, id: number, deps: PipelineDeps): Promise<void> {
   const row = await getTenderRow(id);
   if (!row || row.decision !== 'candidate') return;
   const source = sourceOf(deps, row.source);
   const listed = rowToListed(row);
   await appendLog(runId, `Reading ${row.externalId} ${row.title}`);
-  const detail = await source.getDetail(row.externalId);
-  const docs = await deps.readDocuments(detail.links, source.fileUrl, deps.maxDocPages, (m) => void appendLog(runId, `  ${m}`).catch(() => {}));
-  const analysis = await deps.analyse(listed, detail, docs.text, deps.profile());
-  await saveMatched(id, detail, analysis, docs.pages);
-  await bumpCounters(runId, { matched: 1 });
-  await appendLog(runId, `  -> ${analysis.relevance}, score ${analysis.score}`);
+  try {
+    const detail = await source.getDetail(row.externalId);
+    const docs = await deps.readDocuments(detail.links, source.fileUrl, deps.maxDocPages, (m) => void appendLog(runId, `  ${m}`).catch(() => {}));
+    const analysis = await deps.analyse(listed, detail, docs.text, deps.profile());
+    await saveMatched(id, detail, analysis, docs.pages);
+    await bumpCounters(runId, { matched: 1 });
+    await appendLog(runId, `  -> ${analysis.relevance}, score ${analysis.score}`);
+  } catch (e) {
+    if (e instanceof AiError && !e.retryable && !isFatalAiError(e)) {
+      await markSkipped(id, `analysis failed: ${e.message}`.slice(0, 300));
+      await appendLog(runId, `  skipped: analysis failed (${e.message})`);
+      return;
+    }
+    throw e;
+  }
 }

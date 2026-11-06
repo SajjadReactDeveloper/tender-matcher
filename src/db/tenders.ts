@@ -20,8 +20,11 @@ const toValues = (source: string, t: ListedTender) => ({
   postingDate: orNull(t.advertised), closingDate: orNull(t.closing), closingTime: orNull(t.closingTime),
 });
 
-export async function knownTenders(source: string): Promise<Map<string, { closingDate: string | null; closingTime: string | null }>> {
-  const rows = await withRetry(() => getDb().select({ id: tenders.externalId, d: tenders.closingDate, t: tenders.closingTime }).from(tenders).where(eq(tenders.source, source)));
+export async function knownTenders(source: string, externalIds: string[]): Promise<Map<string, { closingDate: string | null; closingTime: string | null }>> {
+  if (!externalIds.length) return new Map();
+  const rows = await withRetry(() =>
+    getDb().select({ id: tenders.externalId, d: tenders.closingDate, t: tenders.closingTime }).from(tenders).where(and(eq(tenders.source, source), inArray(tenders.externalId, externalIds))),
+  );
   return new Map(rows.map((r) => [r.id, { closingDate: r.d, closingTime: r.t }]));
 }
 
