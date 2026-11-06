@@ -47,7 +47,7 @@ The current Tender Matcher is a plain Node script plus one HTML page, backed by 
 ## Design (builder's calls unless marked)
 
 ### Stack
-Next.js App Router, TypeScript strict, React Server Components for the page shell and client components for the interactive dashboard. Drizzle ORM with the Neon serverless driver. Vitest for tests. ESLint and Prettier. ExcelJS for export. No component library; the existing hand-written CSS is ported.
+Latest Next.js (16.4.5 on 2026-11-06, per the owner's request; use whatever `latest` is when the build starts and pin it) with the App Router, the matching latest React, the Workflow SDK (`workflow`, currently 5.4.0) and Node 24 on Vercel. Next 16 conventions apply (for example, `middleware` is now `proxy.ts`; the builder must check the Next 16 docs rather than rely on older habits). TypeScript strict, React Server Components for the page shell and client components for the interactive dashboard. Drizzle ORM with the Neon serverless driver. Vitest for tests. ESLint and Prettier. ExcelJS for export. No component library; the existing hand-written CSS is ported.
 
 ### Data model (Postgres)
 - `tenders`: id, `source` (text), `external_id`, title, organization, office, location, category, sector, nature, type, ref_no, url, posting_date, closing_date, closing_time, `decision` (`matched` | `skipped`), skip_reason, plus the analysis columns (relevance, score, recommendation, challenges, scope, contact, bid_security, bid_validity, procedure, doc links, pages_read, analysed_at). Unique on (`source`, `external_id`). Screened-and-skipped tenders are rows with `decision = 'skipped'`, which replaces the old `seen` map.
