@@ -24,7 +24,6 @@ Core services:
 - IoT, cloud hosting and migration, cybersecurity and identity/access projects
 - Healthcare IT, education IT, AR/VR training
 - Software maintenance, managed IT services, IT support outsourcing, BPO and data-entry/digitisation services
-- IT hardware and equipment supply (computers, servers, networking, UPS, CCTV, IT peripherals) that we can supply or integrate
 - IT and software consultancy, feasibility studies, technology advisory, RFPs and EOIs for any of the above
 
 ## Not a match
@@ -32,3 +31,7 @@ Core services:
 - Medicines, medical consumables, laboratory chemicals and glassware
 - Food, uniforms, stationery, furniture, vehicles, fuel, ammunition, mechanical spares and tools
 - Generic supplies with no IT or software content
+- Hardware supply (computers, laptops, servers, networking gear, UPS, CCTV, printers, peripherals), even when described as "IT equipment"
+- Internet or connectivity services and network installation
+- Equipment maintenance and hardware repair or AMC contracts
+- Software licence resale (for example OS or database licences) with no development or integration work
