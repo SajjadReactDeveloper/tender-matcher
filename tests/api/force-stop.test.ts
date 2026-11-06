@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { createRun, getCurrentRun, markRunning } from '@/db/queries';
 import { createTestDb } from '../helpers/test-db';
+import { signedIn } from '../helpers/auth';
 
 vi.mock('workflow/api', () => ({ start: async () => ({ runId: 'wf_1' }) }));
 
-const stop = () => new Request('http://localhost:3000/api/runs/stop', { method: 'POST', headers: { host: 'localhost:3000' } });
+let auth = {} as { cookie: string };
+const stop = () => new Request('http://localhost:3000/api/runs/stop', { method: 'POST', headers: { host: 'localhost:3000', ...auth } });
 
 async function route() {
   const db = await createTestDb();
@@ -13,7 +15,10 @@ async function route() {
   return import('@/app/api/runs/stop/route');
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(async () => {
+  vi.clearAllMocks();
+  auth = await signedIn();
+});
 
 describe('POST /api/runs/stop on a run whose workflow is lost', () => {
   test('the first Stop asks politely; a second Stop force-cancels the run so Fetch works again', async () => {

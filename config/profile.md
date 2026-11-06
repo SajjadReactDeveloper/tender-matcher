@@ -1,6 +1,6 @@
 # Company profile: Funavry Technologies
 
-Edit this file any time. It is read at the start of every run and used to decide which tenders match us.
+Edit this file, then redeploy (it ships with the app). It is read at the start of every run and used to decide which tenders match us.
 
 ## What we do
 Funavry Technologies is a software development and IT services company focused on innovation, quality and reliable delivery.

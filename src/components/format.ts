@@ -9,6 +9,9 @@ export const midnight = (): Date => {
 // Whole calendar days from today to an ISO date (YYYY-MM-DD): 0 today, negative once closed.
 export const daysLeft = (iso: string): number => Math.round((new Date(iso + 'T00:00:00').getTime() - midnight().getTime()) / DAY);
 
+// A tender with no closing date counts as open (daysLeft would be NaN and hide it).
+export const isOpen = (t: { lastDate: string }): boolean => !t.lastDate || daysLeft(t.lastDate) >= 0;
+
 export const fmt = (iso: string): string => {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) });

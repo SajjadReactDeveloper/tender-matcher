@@ -2,12 +2,14 @@ import { start } from 'workflow/api';
 import { z } from 'zod';
 import { createRun, finishRun, getCurrentRun, setWorkflowRunId } from '@/db/queries';
 import { fetchRunWorkflow } from '@/jobs/fetch-run';
+import { requireSession } from '@/lib/auth/require-session';
 import { HttpError, assertSameOrigin, errorResponse, rateLimit, readJsonBody } from '@/lib/security';
 
 const body = z.object({ limit: z.number().int().min(1).max(3000).default(150) });
 
 export async function POST(req: Request): Promise<Response> {
   try {
+    await requireSession(req);
     assertSameOrigin(req);
     rateLimit('runs:start', 5);
     const parsed = body.safeParse(await readJsonBody(req));
@@ -28,8 +30,9 @@ export async function POST(req: Request): Promise<Response> {
   }
 }
 
-export async function GET(): Promise<Response> {
+export async function GET(req: Request): Promise<Response> {
   try {
+    await requireSession(req);
     return Response.json((await getCurrentRun()) ?? { run: null, logs: [] });
   } catch (e) {
     return errorResponse(e);

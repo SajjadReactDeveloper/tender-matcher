@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TenderView } from '@/domain/types';
 import { api } from './api-client';
-import { daysLeft } from './format';
+import { daysLeft, isOpen } from './format';
 import { RunBar, isActive, type LogLine, type RunSummary } from './RunBar';
 import { Runway } from './Runway';
 import { TenderList } from './TenderList';
@@ -103,7 +103,7 @@ function DashboardInner({ signOut }: { signOut?: ReactNode }) {
   const sources = useMemo(() => [...new Set(tenders.map((t) => t.source))], [tenders]);
 
   const base = useMemo(
-    () => tenders.filter((t) => (!source || t.source === source) && (when === 'all' || daysLeft(t.lastDate) >= 0)),
+    () => tenders.filter((t) => (!source || t.source === source) && (when === 'all' || isOpen(t))),
     [tenders, source, when],
   );
   const visible = useMemo(() => {
@@ -115,7 +115,7 @@ function DashboardInner({ signOut }: { signOut?: ReactNode }) {
       posted: (a, b) => b.postingDate.localeCompare(a.postingDate),
     };
     return base
-      .filter((t) => (when !== '7' || daysLeft(t.lastDate) <= 7) && (!rel || t.relevance === rel) && (!needle || [t.name, t.department, t.scope, t.refNo, t.recommendation].join(' ').toLowerCase().includes(needle)))
+      .filter((t) => (when !== '7' || !t.lastDate || daysLeft(t.lastDate) <= 7) && (!rel || t.relevance === rel) && (!needle || [t.name, t.department, t.scope, t.refNo, t.recommendation].join(' ').toLowerCase().includes(needle)))
       .sort(by[sort] ?? by.closing);
   }, [base, q, rel, sort, when]);
 

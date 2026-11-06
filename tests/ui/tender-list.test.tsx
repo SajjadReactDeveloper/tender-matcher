@@ -58,6 +58,12 @@ describe('TenderList', () => {
     expect(screen.getByRole('link', { name: 'Tender document' })).toHaveAttribute('href', 'https://epms.ppra.gov.pk/pdf?file=x');
   });
 
+  test('a tender with no closing date says so instead of showing Invalid Date', () => {
+    render(<TenderList {...props} tenders={[tender({ lastDate: '' })]} hasAny />);
+    expect(screen.getByText('No closing date')).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+  });
+
   test('tender text is rendered as text, never as HTML', () => {
     const { container } = render(<TenderList {...props} tenders={[tender({ name: '<img src=x onerror=alert(1)>' })]} hasAny />);
     expect(container.querySelector('img')).toBeNull();

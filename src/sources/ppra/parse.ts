@@ -48,6 +48,7 @@ export function parseListing(html: string, { allowEmpty = false }: { allowEmpty?
     });
   });
   // An empty first page means the site changed; an empty later page just means the listing shrank while we were reading it.
+  if (tenders.some((t) => !t.externalId)) throw new SourceShapeError('source rows without a tender id'); // selectors drifted
   if (!tenders.length && !allowEmpty) throw new SourceShapeError('source returned no tenders');
   return { total, tenders };
 }

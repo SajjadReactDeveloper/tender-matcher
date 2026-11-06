@@ -1,10 +1,12 @@
 import { listMatched } from '@/db/tenders';
+import { requireSession } from '@/lib/auth/require-session';
 import { assertSameOrigin, errorResponse, rateLimit } from '@/lib/security';
 import { toView } from '@/lib/tender-view';
 import { buildXlsx } from '@/lib/xlsx';
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    await requireSession(req);
     assertSameOrigin(req);
     rateLimit('export', 10);
     const buf = await buildXlsx((await listMatched()).map(toView));

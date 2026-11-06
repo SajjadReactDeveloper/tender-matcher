@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { colorClass, daysLeft, safeHref, verdictOf, whyOf } from '@/components/format';
+import { colorClass, daysLeft, isOpen, safeHref, verdictOf, whyOf } from '@/components/format';
 
 const iso = (offsetDays: number) => {
   const d = new Date();
@@ -29,6 +29,12 @@ describe('format helpers', () => {
     expect(colorClass('High')).toBe('High');
     expect(colorClass('Medium')).toBe('Medium');
     expect(colorClass('"><script>')).toBe('Low');
+  });
+
+  test('isOpen treats a tender with no closing date as open, and a past date as closed', () => {
+    expect(isOpen({ lastDate: '' })).toBe(true);
+    expect(isOpen({ lastDate: iso(0) })).toBe(true);
+    expect(isOpen({ lastDate: iso(-1) })).toBe(false);
   });
 
   test('safeHref allows only http and https links', () => {

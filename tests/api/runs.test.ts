@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { createRun, finishRun, getCurrentRun, markRunning } from '@/db/queries';
 import { createTestDb } from '../helpers/test-db';
+import { signedIn } from '../helpers/auth';
 
 const start = vi.fn(async () => ({ runId: 'wf_123' }));
 vi.mock('workflow/api', () => ({ start: (...a: unknown[]) => (start as unknown as (...x: unknown[]) => unknown)(...a) }));
 
 const json = { 'content-type': 'application/json', host: 'localhost:3000' };
+let auth = {} as { cookie: string };
+const get = () => new Request('http://localhost:3000/api/runs', { headers: { host: 'localhost:3000', ...auth } });
 const post = (body: unknown, headers: Record<string, string> = {}) =>
-  new Request('http://localhost:3000/api/runs', { method: 'POST', headers: { ...json, ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+  new Request('http://localhost:3000/api/runs', { method: 'POST', headers: { ...json, ...auth, ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
 
 async function routes() {
   vi.resetModules(); // fresh in-memory rate limiter per test
@@ -18,6 +21,7 @@ async function routes() {
 }
 
 beforeEach(async () => {
+  auth = await signedIn();
   start.mockClear();
 });
 
@@ -95,9 +99,9 @@ describe('GET /api/runs/current', () => {
     const db = await createTestDb();
     const { runsRoute, setDb } = await routes();
     setDb(db);
-    expect(await (await runsRoute.GET()).json()).toEqual({ run: null, logs: [] });
+    expect(await (await runsRoute.GET(get())).json()).toEqual({ run: null, logs: [] });
     const run = await createRun(5);
-    const body = await (await runsRoute.GET()).json();
+    const body = await (await runsRoute.GET(get())).json();
     expect(body.run.id).toBe(run.id);
     expect(body.logs).toEqual([]);
   });
@@ -108,7 +112,7 @@ describe('POST /api/runs/stop', () => {
     const db = await createTestDb();
     const { stopRoute, setDb } = await routes();
     setDb(db);
-    const req = () => new Request('http://localhost:3000/api/runs/stop', { method: 'POST', headers: { host: 'localhost:3000' } });
+    const req = () => new Request('http://localhost:3000/api/runs/stop', { method: 'POST', headers: { host: 'localhost:3000', ...auth } });
     expect((await stopRoute.POST(req())).status).toBe(409);
     const run = await createRun(5);
     await markRunning(run.id);
@@ -120,7 +124,7 @@ describe('POST /api/runs/stop', () => {
     const db = await createTestDb();
     const { stopRoute, setDb } = await routes();
     setDb(db);
-    const res = await stopRoute.POST(new Request('http://localhost:3000/api/runs/stop', { method: 'POST', headers: { host: 'localhost:3000', origin: 'https://evil.com' } }));
+    const res = await stopRoute.POST(new Request('http://localhost:3000/api/runs/stop', { method: 'POST', headers: { host: 'localhost:3000', origin: 'https://evil.com', ...auth } }));
     expect(res.status).toBe(403);
   });
 });

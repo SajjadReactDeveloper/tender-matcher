@@ -24,6 +24,14 @@ describe('parseListing', () => {
   });
 });
 
+describe('parseListing with drifted markup', () => {
+  test('a row without a tender id (selectors drifted) fails loudly instead of storing blank ids', () => {
+    const html = '<table class="cb-rt"><tbody><tr><td class="cb-rt-sr">1</td><td data-label="Tender Details"><strong>Some title</strong></td></tr></tbody></table>';
+    expect(() => parseListing(html)).toThrowError(SourceShapeError);
+    expect(() => parseListing(html)).toThrowError('tender id');
+  });
+});
+
 describe('parseListing on a later page', () => {
   test('an empty page is the end of the listing when the caller expects it (a page after the first)', () => {
     expect(parseListing(fixture('empty.html'), { allowEmpty: true })).toEqual({ total: 0, tenders: [] });

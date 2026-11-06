@@ -3,6 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { Dashboard } from '@/components/Dashboard';
+import { redirectToLogin } from '@/components/session';
+
+vi.mock('@/components/session', () => ({ redirectToLogin: vi.fn() }));
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const noRun = { run: null, logs: [] };
@@ -87,6 +90,12 @@ describe('Dashboard', () => {
     routes({ 'GET /api/runs': () => json({ run: { id: 3, status: 'failed', matched: 0, screened: 0, error: 'source returned no tenders' }, logs: [] }) });
     render(<Dashboard />);
     expect(await screen.findByText('source returned no tenders')).toBeInTheDocument();
+  });
+
+  test('an expired session (401) sends the person to the login page instead of leaving a dead dashboard', async () => {
+    routes({ 'GET /api/runs': () => json({ error: 'Not signed in' }, 401), 'GET /api/tenders': () => json({ error: 'Not signed in' }, 401) });
+    render(<Dashboard />);
+    await waitFor(() => expect(redirectToLogin).toHaveBeenCalled());
   });
 
   test('the Excel button downloads through fetch and reports a failure as a toast', async () => {

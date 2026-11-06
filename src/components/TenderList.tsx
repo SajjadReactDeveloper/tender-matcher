@@ -19,7 +19,7 @@ function Item({ t, open, onToggle }: { t: TenderView; open: boolean; onToggle: (
   const d = daysLeft(t.lastDate);
   const v = verdictOf(t);
   const rc = colorClass(t.relevance);
-  const when = d < 0 ? { cls: 'closed', head: 'Closed', sub: '' } : { cls: d <= 3 ? 'soon' : '', head: fmt(t.lastDate), sub: d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days` };
+  const when = !t.lastDate ? { cls: '', head: 'No closing date', sub: '' } : d < 0 ? { cls: 'closed', head: 'Closed', sub: '' } : { cls: d <= 3 ? 'soon' : '', head: fmt(t.lastDate), sub: d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days` };
   const facts: [string, string][] = (
     [
       ['Closes', `${fmt(t.lastDate)} ${t.closingTime}`.trim()],
