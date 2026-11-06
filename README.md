@@ -30,9 +30,17 @@ Needs Node 24. Use `npm run build && npm start`: `npm run dev` currently reloads
 | `SESSION_SECRET` | 32+ random characters; signs the login cookie. |
 | `APP_EMAIL` | The one fixed login email. |
 | `APP_PASSWORD_HASH` | Hash of the login password: `npx tsx scripts/hash-password.ts 'your password'` |
-| `AI_PROVIDER` | `groq` (default), `openai` or `anthropic`, with the matching `*_API_KEY`. `TEXT_MODEL` / `VISION_MODEL` override the defaults in `src/ai/llm.ts`. |
+| `SETTINGS_ENCRYPTION_KEY` | Encrypts the API keys you save on the Settings page. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Optional: without it you can still use env-var keys. |
+| `AI_PROVIDER`, `*_API_KEY`, `TEXT_MODEL`, `VISION_MODEL` | Fallbacks only. The provider, models and keys chosen on the **Settings** page win; these are used when nothing is saved there. |
 
 The Groq free tier limits PDF reading to roughly 15 to 25 tenders a day; a paid key (OpenAI or Anthropic) removes that. When the quota runs out the job waits and resumes by itself.
+
+## Pages
+
+- **Tenders**: the matched tenders, closing-date runway, filters, Fetch and Excel export.
+- **Runs**: history of every fetch with duration, counts, AI calls, tokens and estimated cost. A run opens into one timeline of its log, AI calls and requests to the tender site.
+- **Audit log**: every AI call (provider, model, input/output tokens, latency, rate limits, errors, truncated prompt and reply) and every event (fetch requests, run steps, settings changes, sign-ins). Filterable, exportable as CSV, append-only, pruned after 180 days.
+- **Settings**: choose the AI provider and models, store API keys (encrypted in Neon, only the last 4 characters shown), test the connection, and see usage for 24 h / 7 d / 30 d. Cost figures are estimates from a small built-in price table.
 
 ## Importing the old app's data
 

@@ -42,8 +42,9 @@ On the configuration screen:
 | `SESSION_SECRET` | the 64-character value from step 0.2 |
 | `APP_EMAIL` | your login email |
 | `APP_PASSWORD_HASH` | the hash from step 0.1 (paste it exactly) |
-| `AI_PROVIDER` | `groq` (or `openai` / `anthropic`) |
-| `GROQ_API_KEY` | your key (or the key for the provider you chose) |
+| `SETTINGS_ENCRYPTION_KEY` | a random 32-byte key, so the Settings page can store API keys encrypted. Generate it with: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Keep a copy: if you lose it, re-enter your keys on the Settings page. |
+| `AI_PROVIDER` | optional fallback: `groq` (or `openai` / `anthropic`). The Settings page overrides it. |
+| `GROQ_API_KEY` | optional fallback key. You can instead leave this out and paste the key on the Settings page after signing in. |
 
 Do **not** add `DIRECT_URL` (only needed for running migrations from your own computer).
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useApi } from '../useApi';
 import { clock, duration, ms, num, stamp } from '../fmt';
 
@@ -60,7 +60,13 @@ function timeline(d: Detail): Line[] {
 }
 
 export function RunDetail({ id }: { id: string }) {
-  const { data, error, loading } = useApi<Detail>(`/api/history/${encodeURIComponent(id)}`);
+  const { data, error, loading, reload } = useApi<Detail>(`/api/history/${encodeURIComponent(id)}`);
+  const running = data?.run.status === 'running' || data?.run.status === 'queued';
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(reload, 5000); // follow a run that is still going
+    return () => clearInterval(t);
+  }, [running, reload]);
   const lines = useMemo(() => (data ? timeline(data) : []), [data]);
   const totals = useMemo(() => {
     const ai = data?.aiCalls ?? [];

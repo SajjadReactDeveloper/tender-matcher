@@ -4,7 +4,7 @@ export const num = (n: number | null | undefined): string => (n == null ? 'n/a' 
 export const usd = (n: number | string | null | undefined): string => {
   if (n == null || n === '') return 'n/a';
   const v = Number(n);
-  return v === 0 ? '$0' : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`;
+  return v === 0 ? '$0' : v < 0.0001 ? '<$0.0001' : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`;
 };
 
 export const duration = (sec: number | null | undefined): string => {

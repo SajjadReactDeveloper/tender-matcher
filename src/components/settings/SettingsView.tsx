@@ -52,6 +52,7 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function SettingsView() {
   const { data, error, loading, reload } = useApi<Settings>('/api/settings');
+  const [usageKey, setUsageKey] = useState(0); // remounting the usage panel reloads it after a test call
 
   if (error) {
     return (
@@ -81,10 +82,10 @@ export function SettingsView() {
       <Head />
       <div className="grid-2">
         <div style={{ display: 'grid', gap: 18 }}>
-          <ModelCard settings={data} onSaved={reload} />
+          <ModelCard settings={data} onSaved={reload} onTested={() => setUsageKey((k) => k + 1)} />
           <KeysCard settings={data} onChanged={reload} />
         </div>
-        <UsageCard />
+        <UsageCard key={usageKey} />
       </div>
     </>
   );
@@ -119,7 +120,7 @@ function ModelField({ label, value, options, onChange }: { label: string; value:
   );
 }
 
-function ModelCard({ settings, onSaved }: { settings: Settings; onSaved: () => void }) {
+function ModelCard({ settings, onSaved, onTested }: { settings: Settings; onSaved: () => void; onTested: () => void }) {
   const { toast } = useToast();
   const [provider, setProvider] = useState(settings.provider);
   const [text, setText] = useState(settings.textModel);
@@ -158,6 +159,7 @@ function ModelCard({ settings, onSaved }: { settings: Settings; onSaved: () => v
       setResult({ ok: false, model: '', latencyMs: 0, error: message(e) });
     }
     setTesting(false);
+    onTested();
   };
 
   return (
