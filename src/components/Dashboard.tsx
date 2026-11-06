@@ -1,19 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TenderView } from '@/domain/types';
 import { api } from './api-client';
 import { daysLeft, isOpen } from './format';
 import { RunBar, isActive, type LogLine, type RunSummary } from './RunBar';
 import { Runway } from './Runway';
 import { TenderList } from './TenderList';
-import { ThemeToggle } from './ThemeToggle';
+import { StatRow } from './StatRow';
 import { ToastProvider, useToast } from './Toasts';
 
 const REL: [string, string][] = [['', 'All'], ['High', 'High'], ['Medium', 'Medium'], ['Low', 'Low']];
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-function DashboardInner({ signOut }: { signOut?: ReactNode }) {
+function DashboardInner() {
   const { toast } = useToast();
   const [tenders, setTenders] = useState<TenderView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,17 +166,10 @@ function DashboardInner({ signOut }: { signOut?: ReactNode }) {
 
   return (
     <div className="wrap">
-      <header>
-        <div className="brand">
-          <svg viewBox="0 0 34 34" fill="none" aria-hidden="true">
-            <rect x="2" y="2" width="30" height="30" rx="9" stroke="currentColor" strokeWidth="2.5" />
-            <path d="M9 22l5-5 4 3 7-8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="25" cy="12" r="2.2" fill="currentColor" />
-          </svg>
-          <div>
-            <h1>Tender Matcher</h1>
-            <p className="tag">Active tenders, matched to Funavry</p>
-          </div>
+      <div className="page-head">
+        <div>
+          <h1>Tenders</h1>
+          <p>Active tenders, matched to Funavry</p>
         </div>
         <div className="controls">
           <label className="scan">
@@ -188,10 +181,10 @@ function DashboardInner({ signOut }: { signOut?: ReactNode }) {
           <button type="button" className="btn" onClick={download} disabled={downloading}>
             {downloading ? 'Preparing...' : 'Download Excel'}
           </button>
-          <ThemeToggle />
-          {signOut}
         </div>
-      </header>
+      </div>
+
+      <StatRow tenders={tenders} run={run} loading={loading} />
 
       <RunBar loading={!runLoaded} run={run} logs={logs} matchedTotal={tenders.length} offline={offline} onStop={stop} />
 
@@ -242,10 +235,10 @@ function DashboardInner({ signOut }: { signOut?: ReactNode }) {
   );
 }
 
-export function Dashboard({ signOut }: { signOut?: ReactNode }) {
+export function Dashboard() {
   return (
     <ToastProvider>
-      <DashboardInner signOut={signOut} />
+      <DashboardInner />
     </ToastProvider>
   );
 }
